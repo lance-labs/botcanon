@@ -1,0 +1,4 @@
+#!/bin/sh
+# Block pushes whose history contains secrets.
+command -v gitleaks >/dev/null 2>&1 || { echo "pre-push: gitleaks not installed (see README)" >&2; exit 1; }
+exec gitleaks git --redact --no-banner

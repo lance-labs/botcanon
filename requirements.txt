@@ -1,0 +1,3 @@
+fastembed>=0.3
+numpy
+pyyaml

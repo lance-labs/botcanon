@@ -1,0 +1,15 @@
+---
+name: second-brain-promote
+description: Use when draining inbox/ or deciding whether a fact earns a canon write in the second brain.
+---
+# Promote a fact into canon
+
+Only one curator writes canon (`decisions/`, `people/`, `projects/`, `GOALS.md`). Everyone else proposes by dropping a Markdown file in `inbox/`.
+
+1. Read each inbox item. Ask: is it durable, sourced, and not already in canon? If not, discard it and say why.
+2. Pick one home. A rule or choice goes in a new `decisions/YYYY-MM-DD-<entity>.md` with `- Date:`, `- Owner:`, `- Decision:`, and a `- Revisit:` line (`standing (no review date)` for standing rules, `~YYYY-MM-DD` for time-bound ones). A fact about a person or project edits that note.
+3. If it replaces an older decision, add `- Prior: decisions/<old>.md`. The old one then ranks low and drops out of freshness checks.
+4. Append one claim to `log/YYYY-MM.jsonl` (`id`, `ts`, `entity`, `text`, optional `successor`).
+5. Add or update a golden in `tools/retrieval_tests.yaml` that would fail if the fact got lost.
+6. Move the inbox item to `inbox/_processed/`.
+7. Run `python3 tools/brain.py flush -m "<what>"` once for the whole batch. Do not finish on RED.

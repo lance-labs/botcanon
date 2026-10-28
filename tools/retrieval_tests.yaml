@@ -1,0 +1,21 @@
+# Goldens: a query and the note that must answer it.
+# expect_path + max_rank, reject_path (must not appear), expect_empty (no-answer).
+recall_at_5_floor: 0.9
+goldens:
+  - {id: person-ari, query: "Ari Novak", expect_path: people/ari-novak.md, max_rank: 1}
+  - {id: person-dana-lex, mode: lexical, query: "Dana Okafor", expect_path: people/dana-okafor.md, max_rank: 1}
+  - {id: who-supplies-flour, query: "who supplies our flour", expect_path: people/ari-novak.md, max_rank: 3}
+  - {id: order-deadline, query: "when do flour orders need to be placed", expect_path: people/ari-novak.md, max_rank: 3}
+  - {id: bookkeeping, query: "who reconciles the accounts each month", expect_path: people/dana-okafor.md, max_rank: 3}
+  - {id: oven-budget, query: "how much can we spend on the new oven", expect_path: projects/new-oven.md, max_rank: 3}
+  - {id: oven-next, mode: lexical, query: "electrical panel", expect_path: projects/new-oven.md, max_rank: 1}
+  - {id: market-plan, query: "farmers market Wednesday stall", expect_path: projects/farmers-market.md, max_rank: 3}
+  - {id: hours-current, query: "what are the opening hours", expect_path: decisions/2026-03-01-opening-hours.md, max_rank: 1}
+  - {id: hours-nl-lexical, mode: lexical, query: "what time does the bakery open on Tuesday", expect_path: decisions/2026-03-01-opening-hours.md, max_rank: 3}
+  - {id: pricing, query: "how much is a sourdough loaf", expect_path: decisions/2026-02-01-pricing.md, max_rank: 3}
+  - {id: food-cost-goal, query: "food cost target", expect_path: GOALS.md, max_rank: 3}
+  - {id: who-writes, query: "who is allowed to write canon notes", expect_path: GOALS.md, max_rank: 3}
+  - {id: neg-no-log-leak, query: "bakery closes Mondays", reject_path: log/}
+  - {id: neg-no-inbox, query: "opening hours", reject_path: inbox/}
+  - {id: none-nonsense, mode: lexical, query: "zxqv blorptastic", expect_empty: true}
+  - {id: none-semantic, mode: semantic, query: "quantum chromodynamics lattice gauge theory", expect_empty: true}
