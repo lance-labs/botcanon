@@ -1,8 +1,30 @@
 # second-brain-starter
 
-A small, file-first second brain for people and AI agents. Your notes are plain Markdown in git. A SQLite index (FTS5 plus local embeddings) makes them searchable, and a test suite tells you when retrieval or freshness breaks.
+**TL;DR:** A shared, checkable memory for your AI assistants. Facts live in plain text files you own, in a GitHub repo. Your assistants search them before they answer, quote the line they relied on, and say "I don't know" when no note says it. A built-in test suite tells you when search gets worse. It runs on your own computer with no paid services.
 
 The sample vault describes Juniper Bakery, a fictional business. Replace it with your own notes.
+
+## What you get
+
+- **One memory for all your assistants.** Notes are plain Markdown in git, so every agent, and you, read the same record. Nothing lives only in one chat.
+- **Answers you can check.** `answer` returns `file:line "quote"` and confirms the line is really in the file. In the author's vault, with agents following the [Agent rules](#agent-rules), made-up answers on a held-out set of 22 off-topic questions went from 22 to 0, while 1 of 10 real questions got a wrong "I don't know".
+- **Better search than plain embeddings, measured.** On the public sample set: top-result hit rate 0.79 vs 0.75 for plain embeddings, and no-answer questions handled correctly 3 of 3 vs 0 of 3. It's a small set; run `bench.py` on yours.
+- **You stay in charge.** Agents can only propose to `inbox/`. You, or one curator agent, decide what becomes a fact, and the log keeps who said what, and when.
+- **It tells you when it breaks.** `verify` runs your test questions on every change and refuses to save if search got worse or the index is stale.
+- **Private and free to run.** Everything runs locally: SQLite and a small model, with no server and no API key.
+
+Not promised: it does not judge whether a fact is true, does not summarize across notes, and can still miss questions worded very differently from the note (see [Known limits](#known-limits)).
+
+## What it costs
+
+| | |
+|---|---|
+| **Time** | Estimate: about 60 minutes for a first setup if you've never used GitHub, about 10 if you have. Then a few minutes per batch of notes to review the inbox. |
+| **Accounts** | A free [GitHub](https://github.com/signup) account. Keep your copy **private**: it will hold facts about you. |
+| **Software** | [GitHub Desktop](https://desktop.github.com/) (or git), [Python 3.10+](https://www.python.org/downloads/), and [gitleaks](https://github.com/gitleaks/gitleaks#installing), which blocks accidental secrets. All free. |
+| **Skills** | Copying and pasting commands into a terminal, and editing text files. No programming. |
+| **Computer** | Any recent Mac, Windows or Linux machine. About 200 MB of disk, including a ~80 MB model downloaded on first run. |
+| **Ongoing** | Write notes and run `flush` after edits. Optional: a second agent with its own hidden test questions ([docs/EVAL-AGENT.md](docs/EVAL-AGENT.md)). |
 
 ## The problem
 
@@ -22,7 +44,7 @@ It is for one person, or a small team, who runs several AI agents and wants them
 
 ## How it works
 
-In one sentence: agents *propose* facts, a curator *promotes* the good ones into plain Markdown files, and a small rebuildable SQLite index answers questions over those files with two kinds of search, a second-pass check, and an honest "I don't know".
+In one sentence: agents *propose* facts, a curator *promotes* the good ones into plain Markdown files, and a small rebuildable SQLite index answers questions over those files.
 
 ```mermaid
 flowchart LR
@@ -38,56 +60,11 @@ flowchart LR
   R -->|otherwise| IDK["I don't know"]
 ```
 
-### Storage, and why each piece
+**In plain words:** your notes are the record; the index is just a fast way to search them and can be rebuilt any time. A question is matched two ways, by exact words and by meaning, and a second model re-checks the best matches. Decisions count a little more than general notes, and replaced decisions sink. An answer must quote a line from a note that actually states the fact; otherwise you get "I don't know". Every change re-runs the test questions before it is saved.
 
-| Piece | What it holds | Why |
-|---|---|---|
-| **Markdown** (`decisions/`, `people/`, `projects/`, `GOALS.md`, `CURRENT.md`) | The source of truth. One fact or decision per note, with a `status:` line. | A person can read, edit, diff and review it in git with no tools. If every other piece is deleted, nothing is lost. |
-| **SQLite** (`.index/brain.db`) | `notes(path, sha, title)`: sha256 of each file, so re-indexing touches only changed notes. `chunks(id, path, heading, text, emb)`: each note split by heading, with its embedding stored as a float32 BLOB. `fts`: an FTS5 full-text table over text, heading and title. `meta`: index time and schema version. | One file, no server, fast. It is **derived**: delete `.index/` and `ingest --full` rebuilds it exactly. A schema-version bump forces a full rebuild. |
-| **JSONL** (`log/YYYY-MM.jsonl`) | An append-only log of every promoted claim. Fields: `id`, `ts`, `type`, `entity`, `text`, `from_agent`, `source`, `canon` (the note it landed in) and `successor` (the claim that replaced it). | History and provenance without rewriting notes. You can see who said what, when, and what overrode it. Lines are never edited. |
+Full details (storage, status field, ranking weights, freshness, cite-and-verify, design rationale): [docs/HOW-IT-WORKS.md](docs/HOW-IT-WORKS.md). The design essay is [docs/WHY.md](docs/WHY.md).
 
-### Note status
-
-Every canon note carries `status: proposed | approved | superseded` (frontmatter `status:` or a `- Status:` bullet).
-
-- `inbox/` notes are `proposed`; `propose` writes this for you.
-- Promoted notes are `approved`.
-- A decision named on a newer decision's `Prior:` line is `superseded`.
-
-Ranking reads the status first. If a note has none, it falls back to the folder and the `Prior:` lines. `verify` fails if a canon note is missing a status, has an invalid one, is still `proposed`, or if `superseded` notes and `Prior:` lines disagree. `tools/migrate_status.py` adds the field to an existing store; it is idempotent, and `--check` only reports.
-
-### Two kinds of search, then a second pass
-
-1. **Lexical (exact words).** SQLite FTS5 with BM25 ranking. Common words (a stopword list) are stripped. It first requires all remaining words (AND). If that finds nothing and the query has more than one word, it retries with any word (OR). A separate pass matches words against note **titles** only.
-2. **Semantic (meaning).** Each chunk is embedded with `BAAI/bge-small-en-v1.5` (384-dimensional, runs on CPU). The query is embedded with the prefix `Represent this sentence for searching relevant passages: `, and chunks are ranked by cosine similarity. This finds "when do we close" in a note that says "closes Mondays".
-3. **Fusion.** The lexical, semantic and title lists (40 candidates each) are merged by Reciprocal Rank Fusion: each list contributes `1 / (60 + rank)`. The sum is multiplied by the note's authority weight (below), and at most 2 chunks per note are kept.
-4. **Rerank.** The top 20 are re-scored by a cross-encoder (`Xenova/ms-marco-MiniLM-L-6-v2`), which reads the question and passage together. The final order is an equal-weight RRF of the hybrid rank and the cross-encoder rank. `BRAIN_RERANK=0` turns this off.
-5. **"I don't know".** `answer` cites a note only if the best cross-encoder score is above **-9.4**, and then only with a quoted line (cite-and-verify, below). With the reranker off, it needs a strict all-words lexical match or a cosine of at least **0.55**; a title-only or OR-only match is not enough.
-
-### Hierarchy and weights (from `path_weight` in `tools/brain.py`)
-
-| Note | Weight |
-|---|---|
-| `decisions/` (current) | 1.02 |
-| `GOALS.md` | 1.02 |
-| `people/`, `projects/` | 1.0 |
-| `CURRENT.md` (derived dashboard) | 0.4 |
-| `status: superseded` or `status: proposed` | 0.1 |
-| superseded decision (named on a newer `Prior:` line, no status) | 0.1 |
-| anything else (`log/`, `inbox/`) | 0.1 |
-
-Decisions and goals edge out people and projects as a tie-breaker. The dashboard never outranks the notes it summarizes, and old or unreviewed material sinks without disappearing.
-
-**OUTRANKED and SUPERSEDED.** `provenance` (`context` over MCP) returns the current decision first. Log claims dated before that decision are listed as OUTRANKED, and decisions replaced through `Prior:` are listed as SUPERSEDED. Old facts stay visible, but labeled, so an agent can't quote them as current.
-
-### Freshness, flush, verify, CI
-
-- **RED** (verify fails): a canon note is newer than the index, the store was never indexed, or an inbox item is older than 48 h.
-- **YELLOW** (warning): a decision is past its `Revisit:` date.
-- **`flush`** = ingest, then verify, then commit. Write canon only through it. **`verify`** runs every golden question in `retrieval_tests.yaml` and requires recall@5 ≥ 0.9, freshness not RED, and the built-in checks to pass (status, supersession, freshness fixtures).
-- **CI** (`.github/workflows/ci.yml`, on every push and pull request): gitleaks over full history, hook install, ingest, verify (fact store and novel example), the MCP end-to-end test, and `bench.py` followed by `git diff --exit-code README.md`, so the results table can't drift from the code.
-
-### What this does NOT do (known limits)
+## Known limits
 
 - **The "I don't know" gate is NOT reliable for questions about the owner's personal attributes. Callers must check the citation themselves.** In the author's real vault at the -9.4 cutoff, a confident-looking but wrong answer came back for 5 of 6 calibration questions like "what is Lance's blood type" or "who is Lance's dentist", and for **22 of 22** questions in a separate held-out set (20 "Lance + attribute" questions such as favorite color, doctor or home address, plus 2 questions about a bot the vault knows nothing about). The owner's name appears in many notes, so the reranker scores these as relevant. On general off-topic questions with no owner name, 1 of 21 got a made-up answer ("what time does Costco close"). If the cited note doesn't say it, the brain doesn't know. Cite-and-verify plus rule 2 (Agent rules) brings this to 0 of 22 in the same test; the score gate alone does not.
 - It does not judge truth. It returns what the curator promoted.
@@ -97,23 +74,36 @@ Decisions and goals edge out people and projects as a tie-breaker. The dashboard
 - Scores are calibrated on small stores. Re-check the -9.4 cutoff on yours with `bench.py`.
 - The reranker adds about 0.5 s per query on CPU.
 
-### Cite-and-verify
+## Getting started (no coding background)
 
-`brain.py answer` returns an exact line from a cited note as `path:line "quote"`, and checks that the line is literally in the file. The line must state the question's specific attribute: at least 2/3 of its distinctive words (words in at most 25% of notes), exactly or through a close synonym (word-embedding cosine 0.75 or higher). Otherwise the answer is "I don't know". `answer --spans` also prints the top 3 verified candidate lines, so the answering agent can make the final call (rule 2 below). Code lives in `tools/cite.py`; set `BRAIN_OWNER="First Last"` so the owner's name never counts as an attribute.
+Setup times are estimates. The Windows steps are untested; reports welcome.
 
-## Agent rules
+1. **Make a GitHub account.** Go to https://github.com/signup and follow the steps. The free plan is enough.
+2. **Install GitHub Desktop** from https://desktop.github.com/ and sign in with that account.
+3. **Get your own copy of this repo.** Open https://github.com/rsj2h4sr86-creator/second-brain-starter, click **Use this template**, then **Create a new repository**. Name it `my-brain` and choose **Private**.
+4. **Clone it to your computer.** In GitHub Desktop, choose **File → Clone repository**, pick `my-brain`, choose a folder, then click **Clone**.
+5. **Install Python** 3.10 or newer from https://www.python.org/downloads/. On Windows, tick **Add python.exe to PATH** in the installer.
+6. **Install gitleaks.** Mac: `brew install gitleaks`. Windows or Linux: download the release for your system from https://github.com/gitleaks/gitleaks/releases and put it on your PATH.
+7. **Open a terminal in the folder.** In GitHub Desktop, choose **Repository → Open in Terminal** (Mac) or **Open in Command Prompt** (Windows).
+8. **Run these lines one at a time:**
+   ```sh
+   python3 -m venv .venv
+   . .venv/bin/activate        # Windows (untested): .venv\Scripts\activate
+   pip install -r requirements.txt
+   tools/install-hooks.sh      # Windows (untested): run in Git Bash
+   python3 tools/brain.py ingest
+   python3 tools/brain.py verify
+   ```
+   The last line should end with `verify: GREEN`. The first run downloads a small model, so it takes a minute.
+9. **Ask it something:** `python3 tools/brain.py answer "how much can we spend on the new oven"`. It answers from the sample bakery notes and quotes the line.
+10. **Make it yours.** Replace the bakery notes in `decisions/`, `people/` and `projects/` with your own, then run `python3 tools/brain.py flush -m "my first notes"`. GitHub Desktop shows the change, and you can see it on github.com.
 
-Put these in every agent's boot instructions. The numbers come from the author's real vault, measured on a held-out set written before any tuning: 22 off-topic "owner + attribute" questions (such as the owner's favorite color or doctor) and 10 answerable paraphrases.
+Stuck? Paste the error into any AI assistant along with this README.
 
-1. **Check the second brain before stating facts about the owner. Chat memory is a hint, not proof.** Memory feels confident whether or not it is right. So does search: with the score cutoff alone, 22 of 22 off-topic owner questions got a confident-looking wrong answer. Only a cited note counts.
-2. **Answer only from a quoted line in the cited note that states the fact. Otherwise say "I don't know".** This is the rule that fixed the gate. The quote check in code alone cut made-up answers from 22/22 to 1/22, but it said "I don't know" to 5 of 10 real questions, because notes word things differently ("son" vs the son's name). With an agent judging the verified candidate lines under this rule, the result was **0 of 22 made up and 1 of 10 false "I don't know"**. A related line ("Durable identity (accounts, emails)") is not an answer to "what is the owner's bank account number".
-3. **File lasting facts and decisions to `inbox/` with source and date. Never write canon directly (the curator is the exception).** `propose` writes `status: proposed`, which ranks at 0.1, and `verify` fails if a proposed note sits in canon. One reviewer keeps canon consistent, the log records who said what, and unreviewed text can't outrank a decision.
-4. **Before ending substantial work, update your HANDOFF note (`templates/HANDOFF.md`) with current work, next step and open items, each with its source file.** Session state isn't in the brain by design. In the pilot, "what is the bot working on right now" and "what is its next step" correctly got "I don't know" from the brain. The HANDOFF is the only place that state lives. Sources make it checkable at the next boot, and keeping it out of the index stops stale working notes from being quoted as facts.
-
-## Quickstart
+## Quickstart (terminal)
 
 ```sh
-git clone <this repo> my-brain && cd my-brain
+git clone https://github.com/rsj2h4sr86-creator/second-brain-starter.git my-brain && cd my-brain
 python3 -m venv .venv && . .venv/bin/activate
 pip install -r requirements.txt          # fastembed downloads BAAI/bge-small-en-v1.5 on first use
 tools/install-hooks.sh                   # needs gitleaks on PATH (see Secret scanning)
@@ -135,20 +125,16 @@ python3 tools/bench.py                                                     # reg
 
 After you edit notes, run `python3 tools/brain.py flush -m "what changed"`. It re-ingests only changed files, runs verify, refuses to commit on RED, then commits and pushes. If nothing changed, it does nothing.
 
-## Layout
+## Agent rules
 
-| Path | What lives there |
-|---|---|
-| `decisions/` | One file per decision: `- Date:`, `- Owner:`, `- Decision:`, optional `- Prior:`, `- Revisit:` |
-| `people/`, `projects/` | One note per person or project |
-| `GOALS.md` | Goals and house rules |
-| `CURRENT.md` | Derived dashboard; it ranks below its sources |
-| `log/*.jsonl` | Append-only claims (`id`, `ts`, `entity`, `text`, `successor`). Read by compile, never searched |
-| `inbox/` | Proposals waiting for the curator. Never searched |
-| `skills/` | Agent instructions for promoting and retrieving |
-| `tools/` | `brain.py`, goldens, hooks |
+Put these in every agent's boot instructions. The numbers come from the author's real vault, measured on a held-out set written before any tuning: 22 off-topic "owner + attribute" questions (such as the owner's favorite color or doctor) and 10 answerable paraphrases.
 
-## Retrieval results
+1. **Check the second brain before stating facts about the owner. Chat memory is a hint, not proof.** Memory feels confident whether or not it is right. So does search: with the score cutoff alone, 22 of 22 off-topic owner questions got a confident-looking wrong answer. Only a cited note counts.
+2. **Answer only from a quoted line in the cited note that states the fact. Otherwise say "I don't know".** This is the rule that fixed the gate. The quote check in code alone cut made-up answers from 22/22 to 1/22, but it said "I don't know" to 5 of 10 real questions, because notes word things differently ("son" vs the son's name). With an agent judging the verified candidate lines under this rule, the result was **0 of 22 made up and 1 of 10 false "I don't know"**. A related line ("Durable identity (accounts, emails)") is not an answer to "what is the owner's bank account number".
+3. **File lasting facts and decisions to `inbox/` with source and date. Never write canon directly (the curator is the exception).** `propose` writes `status: proposed`, which ranks at 0.1, and `verify` fails if a proposed note sits in canon. One reviewer keeps canon consistent, the log records who said what, and unreviewed text can't outrank a decision.
+4. **Before ending substantial work, update your HANDOFF note (`templates/HANDOFF.md`) with current work, next step and open items, each with its source file.** Session state isn't in the brain by design. In the pilot, "what is the bot working on right now" and "what is its next step" correctly got "I don't know" from the brain. The HANDOFF is the only place that state lives. Sources make it checkable at the next boot, and keeping it out of the index stops stale working notes from being quoted as facts.
+
+## Results
 
 Generated by `python3 tools/bench.py`. Don't edit by hand.
 
@@ -165,32 +151,21 @@ Public set: 28 answerable + 3 no-answer questions (`evals/public_set.yaml`).
 | hybrid + rerank + answer gate | 0.79 | 0.89 | 0.84 | 1.00 |
 <!-- BENCH:END -->
 
-The sample vault is tiny (10 notes), so these numbers show how the pieces behave. They don't predict quality on a large vault. Run the script on your own vault with your own public set. The public set is never used for tuning, so its misses stay in the table: two flour questions rank the supplier decision above the supplier's note, "who does the books" misses, and "employee dental plan" returned notes until the reranker gate (below); with the gate on, all 3 no-answer questions now come back "I don't know", at the cost of one real question also getting "I don't know". Ten paraphrase questions (indirect wording, no names) were added on 2026-10-28. Before them, hybrid and lexical tied at Hit@1 0.83. With them, lexical falls to 0.68 while hybrid holds at 0.75, which is the case hybrid exists for.
+Notes on these numbers: [docs/HOW-IT-WORKS.md](docs/HOW-IT-WORKS.md#retrieval-results-notes-on-the-public-set).
 
-See [docs/WHY.md](docs/WHY.md) for the design essay.
+## Layout
 
-## Design
-
-- **Search:** hybrid. FTS5 with BM25 and porter stemming, cosine similarity on bge-small embeddings, and a title-match list, fused with reciprocal rank fusion. Stopwords are dropped, and a full-sentence question falls back to an OR query when the strict AND query finds nothing. At most 2 hits per note. Semantic hits below a similarity floor are dropped, so a question with no answer comes back empty.
-- **Rerank:** the top 20 hybrid hits are re-scored by a local cross-encoder (`Xenova/ms-marco-MiniLM-L-6-v2`, via fastembed). The final order is an equal-weight RRF of the hybrid rank and the cross-encoder rank, so authority weights still count. `answer` says "I don't know" when the best cross-encoder logit is at or below -9.4. That cutoff was calibrated on a private 75-question vault plus off-topic questions, not on this public set. Set `BRAIN_RERANK=0` to turn it off and fall back to the lexical/cosine gate. Cost: ~0.5 s per query on 8 CPUs, plus a one-time ~80 MB model download.
-- **Authority:** decisions and GOALS win ties (+2%) over people and projects. A decision named on a newer decision's `- Prior:` line sinks to 0.1. The weights break ties; they do not override relevance.
-- **Compile:** for an entity, CURRENT is the newest non-superseded decision plus log claims dated after it. Older claims move to OUTRANKED, and claims with a `successor` move to SUPERSEDED.
-- **Freshness:**
-  - RED: a note is newer than the index, or an inbox item is older than 48 hours.
-  - YELLOW: a decision is past its `Revisit: ~YYYY-MM-DD` date.
-  - `Revisit: standing (no review date)` never comes due.
-- **Verify:** runs every golden (expected path within a rank, rejected paths, no-answer cases) and enforces a recall@5 floor. It also runs the authority and freshness fixtures and checks that the git hooks are installed.
-- **Provenance:** decisions carry `- From:` (who proposed) and `- Source:` (where it came from). Log claims carry `from_agent`, `ts`, `source`, and `canon` (the note they support). `why` shows all of these for the best match.
-- **I don't know:** `answer` cites a note only when there is a strict lexical match or a semantic match above the floor. Otherwise it returns "I don't know" with exit code 2, so scripts can branch on it.
-- **Ingest:** incremental by sha256. A schema or embedding-model change triggers a full rebuild.
-
-## Why it works this way
-
-- **Files over a database.** Markdown in git is readable, diffable, and survives any tool. The index can always be deleted and rebuilt.
-- **Chat memory is not a record.** Agents propose through `inbox/`, and one curator writes canon. "I remembered" is never a source.
-- **Tests, not hope.** Each promotion adds a golden. Retrieval that quietly gets worse fails verify instead of misleading you later.
-- **No clock.** flush runs on every write batch, so freshness doesn't depend on a scheduled job staying alive.
-- **Small on purpose.** One file of Python, SQLite, and a local model. There is no server, graph database, or API key.
+| Path | What lives there |
+|---|---|
+| `decisions/` | One file per decision: `- Date:`, `- Owner:`, `- Decision:`, optional `- Prior:`, `- Revisit:` |
+| `people/`, `projects/` | One note per person or project |
+| `GOALS.md` | Goals and house rules |
+| `CURRENT.md` | Derived dashboard; it ranks below its sources |
+| `log/*.jsonl` | Append-only claims (`id`, `ts`, `entity`, `text`, `successor`). Read by compile, never searched |
+| `inbox/` | Proposals waiting for the curator. Never searched |
+| `skills/` | Agent instructions for promoting and retrieving |
+| `tools/` | `brain.py`, goldens, hooks |
+| `docs/` | How it works, the design essay, the eval agent, extending to other stores |
 
 ## MCP server
 
@@ -201,43 +176,15 @@ See [docs/WHY.md](docs/WHY.md) for the design essay.
                                   "env": {"BRAIN_VAULT": "/path/to/repo"}}}}
 ```
 
-## Prerequisite: an independent eval agent
+## Going further
 
-The curator writes the notes and the goldens. If it also grades itself, it tends to test what it already knows how to find, and its goldens drift toward its own phrasing. A score from those goldens measures memory, not retrieval. A separate agent with its own storage keeps a hidden question set that the curator never sees and runs it on a schedule.
+- [docs/EVAL-AGENT.md](docs/EVAL-AGENT.md): a second agent keeps hidden test questions, so the curator can't grade itself. Recommended once you rely on the brain.
+- [docs/EXTENDING.md](docs/EXTENDING.md): search a novel or a codebase's docs with the same engine, as a separate store.
 
-Setup:
-1. Pick any second agent, or a person. It must not be the agent that writes canon.
-2. Copy `evals/hidden_set.example.yaml` into that agent's own storage, outside this repo, and write about 20 questions in its own words. Mix status questions, people questions, rule questions, and must-return-nothing questions.
-3. Run it after each batch of changes, or weekly:
-   `python3 tools/brain.py --tests /path/outside/repo/hidden_set.yaml verify`
-4. The eval agent reports pass/fail and recall@5 to the owner, not the questions. When a question fails, the owner tells the curator what is missing ("flour delivery day"), never the question text.
-5. Rotate a few questions each month so the set doesn't become another thing to memorize.
+## Safety checks
 
-The example file uses bakery questions so it runs against the sample vault as-is.
-
-## Extending the boundary
-
-The core is one person's fact store: their agents read from it and propose into it. To search other content with the same engine, such as a novel or a codebase's docs, make it a separate store with its own index and its own `retrieval_tests.yaml`. Never mix the two. Facts about your life and lines of fiction have different authority rules. Mixed goldens hide failures in both, and one store's freshness alarms would block the other's commits.
-
-```sh
-# a store is any folder; --dirs names the content folders to index
-python3 tools/brain.py --root examples/novel --dirs chapters ingest
-python3 tools/brain.py --root examples/novel --dirs chapters search "where did the keeper go"
-python3 tools/brain.py --root examples/novel --dirs chapters verify
-# or: BRAIN_VAULT=/path/to/store BRAIN_DIRS=chapters,notes python3 tools/brain.py verify
-```
-
-Each store keeps its own `.index/` and reads goldens from `<root>/retrieval_tests.yaml` (or pass `--tests`). `examples/novel/` is a two-chapter worked example whose goldens include a check that nothing from the fact store leaks in. For a codebase, point `--dirs` at its Markdown docs, such as `docs,adr`. The engine indexes `.md` only.
-
-This works with any agent that can run a shell command. One worked example is Grok Bot: one bot curates the fact store, another owns the novel store, and each runs `flush` on its own store only. Nothing here depends on Grok Bot.
-
-## CI
-
-`.github/workflows/ci.yml` runs on every push and pull request: gitleaks over full history, hook install, ingest, verify, the MCP end-to-end test, and `bench.py` followed by `git diff --exit-code README.md`, so the published results table cannot drift from the code. Releases are tagged (`v0.5.0`); see `CHANGELOG.md`.
-
-## Secret scanning
-
-`tools/install-hooks.sh` installs a pre-commit hook (scans staged changes) and a pre-push hook (scans history), both with [gitleaks](https://github.com/gitleaks/gitleaks). They fail closed: if gitleaks is not on PATH, the commit or push is blocked with an install hint. Install gitleaks (`brew install gitleaks`, or put the release binary on PATH) and retry. Don't use `--no-verify`. `verify` fails if the hooks are not installed, so a fresh clone without them shows RED.
+- **Secret scanning:** `tools/install-hooks.sh` installs pre-commit and pre-push hooks that run [gitleaks](https://github.com/gitleaks/gitleaks). They fail closed: without gitleaks on PATH, the commit or push is blocked with an install hint. Don't use `--no-verify`. `verify` fails if the hooks are missing, so a fresh clone without them shows RED.
+- **CI** (`.github/workflows/ci.yml`) runs on every push and pull request: gitleaks, ingest, verify, the MCP end-to-end test, and `bench.py` with a check that the Results table matches the code. Releases are tagged; see `CHANGELOG.md`.
 
 ## License
 MIT
