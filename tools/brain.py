@@ -294,7 +294,7 @@ def search(q: str, k: int = 5, mode: str = "hybrid") -> list[dict]:
     out, per = [], {}
     rows = {r["id"]: r for r in conn.execute(
         f"SELECT id,path,heading,text FROM chunks WHERE id IN ({','.join('?' * len(scores)) or 'NULL'})", list(scores))}
-    for cid, sc in sorted(((c, s * path_weight(rows[c]["path"], sup)) for c, s in scores.items()), key=lambda x: -x[1]):
+    for cid, sc in sorted(((c, s * path_weight(rows[c]["path"], sup)) for c, s in scores.items()), key=lambda x: (-round(x[1], 12), rows[x[0]]["path"], x[0])):  # ties: path, then position in note
         r = rows[cid]
         if per.get(r["path"], 0) >= MAX_HITS_PER_NOTE:
             continue

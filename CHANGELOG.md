@@ -2,6 +2,10 @@
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follow [SemVer](https://semver.org/); retrieval-quality changes are noted with their bench numbers.
 
+## [0.5.1] - 2026-10-28
+### Fixed
+- Score ties now break on note path, then position in the note, never on insert order, so re-indexing one note can't reshuffle tied results. (The author's vault had a worse version of this: a contentless FTS5 table never subtracted deleted rows from BM25 stats, so 13/97 goldens ranked differently after an incremental reindex. The starter's FTS5 table stores content, so its deletes were already exact.)
+
 ## [0.5.0] - 2026-10-28
 ### Added
 - Cite-and-verify (`tools/cite.py`): `answer` returns `path:line "quote"` verified in the file, and says I don't know unless the line states the asked attribute. `answer --spans` prints verified candidate lines. MCP `answer` uses it.
