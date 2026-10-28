@@ -1,0 +1,6 @@
+# Goldens for the novel store only. Never mix these with the fact store's goldens.
+recall_at_5_floor: 1.0
+goldens:
+  - {id: keeper-missing, query: "where did the keeper go", expect_path: chapters/01-lighthouse.md, max_rank: 1}
+  - {id: wreck, query: "ship runs aground on the reef", expect_path: chapters/02-storm.md, max_rank: 1}
+  - {id: no-fact-store-leak, mode: lexical, query: "flour supplier", expect_empty: true}

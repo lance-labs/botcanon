@@ -1,0 +1,14 @@
+# TEMPLATE ONLY. The real hidden set lives OUTSIDE this repo, in the eval agent's own storage.
+# The curator must never read it. Same format as tools/retrieval_tests.yaml.
+recall_at_5_floor: 0.8
+goldens:
+  - {id: h-flour-day, query: "which day does the flour arrive", expect_path: people/ari-novak.md, max_rank: 5}
+  - {id: h-mill-name, query: "Stonegate Mill", expect_path: people/ari-novak.md, max_rank: 3}
+  - {id: h-backup-supplier, query: "do we keep a backup flour supplier", expect_path: decisions/2026-02-15-supplier.md, max_rank: 5}
+  - {id: h-price-raise, query: "when do bread prices go up", expect_path: decisions/2026-02-01-pricing.md, max_rank: 5}
+  - {id: h-sunday, query: "is the bakery open on Sunday morning", expect_path: decisions/2026-03-01-opening-hours.md, max_rank: 5}
+  - {id: h-market-menu, query: "what sells at the market stall", expect_path: projects/farmers-market.md, max_rank: 5}
+  - {id: h-oven-type, query: "which oven model is favored", expect_path: projects/new-oven.md, max_rank: 5}
+  - {id: h-second-stall, query: "goal for a second stall", expect_path: GOALS.md, max_rank: 5}
+  - {id: h-no-old-hours, query: "opening hours", reject_path: decisions/2026-01-10-opening-hours.md, k: 1}
+  - {id: h-none, mode: semantic, query: "how to file a patent in Japan", expect_empty: true}

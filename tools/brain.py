@@ -28,7 +28,7 @@ TESTS = TOOLS / "retrieval_tests.yaml"
 SCHEMA_VERSION = "1"
 EMBED_MODEL = os.environ.get("BRAIN_EMBED_MODEL", "BAAI/bge-small-en-v1.5")
 
-CANON_DIRS = ("decisions", "people", "projects")
+CANON_DIRS = tuple(os.environ.get("BRAIN_DIRS", "decisions,people,projects").split(","))
 CANON_ROOT = ("GOALS.md", "CURRENT.md")
 RRF_K = 60
 CANDIDATES = 40
@@ -51,10 +51,10 @@ ISO_RE = re.compile(r"(\d{4}-\d{2}-\d{2})")
 
 # ---------------------------------------------------------------- notes
 
-def canon_files(vault: Path = None) -> list[Path]:
+def canon_files(vault: Path = None, dirs: tuple[str, ...] | None = None) -> list[Path]:
     vault = vault or VAULT
     out = [vault / f for f in CANON_ROOT if (vault / f).is_file()]
-    for d in CANON_DIRS:
+    for d in dirs or CANON_DIRS:
         out += sorted((vault / d).rglob("*.md")) if (vault / d).is_dir() else []
     return out
 
@@ -334,13 +334,14 @@ def revisit_due(text: str) -> str | None:
     return d.group(1) if d else None
 
 
-def freshness(vault: Path = None, last_index_ts: str | None = None, today: date | None = None) -> dict:
+def freshness(vault: Path = None, last_index_ts: str | None = None, today: date | None = None,
+              dirs: tuple[str, ...] | None = None) -> dict:
     vault = vault or VAULT
     today = today or date.today()
     red, yellow = [], []
     if last_index_ts:
         li = datetime.fromisoformat(last_index_ts).timestamp()
-        newer = [rel(p, vault) for p in canon_files(vault) if p.stat().st_mtime > li + 1]
+        newer = [rel(p, vault) for p in canon_files(vault, dirs) if p.stat().st_mtime > li + 1]
         if newer:
             red.append(f"{len(newer)} note(s) newer than the index: run flush")
     else:
@@ -369,14 +370,14 @@ def freshness_fixture() -> tuple[bool, str]:
         f.write_text("# D\n\n- Revisit: ~2000-01-01\n")
         ts = datetime.now(timezone.utc).isoformat()
         os.utime(f, (1, 1))
-        if freshness(v, ts)["level"] != "yellow":
+        if freshness(v, ts, dirs=("decisions",))["level"] != "yellow":
             return False, "past Revisit date not yellow"
         f.write_text("# D\n\n- Revisit: standing (no review date)\n")
         os.utime(f, (1, 1))
-        if freshness(v, ts)["level"] != "green":
+        if freshness(v, ts, dirs=("decisions",))["level"] != "green":
             return False, "standing Revisit flagged"
         os.utime(f, None)
-        if freshness(v, "2000-01-01T00:00:00+00:00")["level"] != "red":
+        if freshness(v, "2000-01-01T00:00:00+00:00", dirs=("decisions",))["level"] != "red":
             return False, "note newer than index not red"
     return True, "past revisit yellow, standing green, stale index red"
 
@@ -490,8 +491,27 @@ def flush(message: str, push: bool = True) -> int:
 
 # ---------------------------------------------------------------- cli
 
+def set_root(root: str | None, tests: str | None, dirs: str | None) -> None:
+    """Point the engine at another store. Each store keeps its own index and goldens."""
+    global VAULT, INDEX_DIR, DB_PATH, TESTS, CANON_DIRS
+    if root:
+        VAULT = Path(root).resolve()
+        INDEX_DIR = VAULT / ".index"
+        DB_PATH = INDEX_DIR / "brain.db"
+        TESTS = VAULT / "retrieval_tests.yaml"
+        if not TESTS.exists():
+            TESTS = VAULT / "tools" / "retrieval_tests.yaml"
+    if tests:
+        TESTS = Path(tests).resolve()
+    if dirs:
+        CANON_DIRS = tuple(d for d in dirs.split(",") if d)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--root", help="store to operate on (default: this repo, or $BRAIN_VAULT)")
+    ap.add_argument("--tests", help="goldens file (default: <root>/retrieval_tests.yaml or <root>/tools/...)")
+    ap.add_argument("--dirs", help="comma-separated content dirs to index (default: decisions,people,projects)")
     sub = ap.add_subparsers(dest="cmd", required=True)
     g = sub.add_parser("ingest"); g.add_argument("--full", action="store_true")
     s = sub.add_parser("search"); s.add_argument("query"); s.add_argument("--k", type=int, default=5)
@@ -501,6 +521,7 @@ def main() -> int:
     sub.add_parser("status")
     f = sub.add_parser("flush"); f.add_argument("-m", default="flush"); f.add_argument("--no-push", action="store_true")
     a = ap.parse_args()
+    set_root(a.root, a.tests, a.dirs)
     if a.cmd == "ingest":
         print(json.dumps(ingest(a.full)))
     elif a.cmd == "search":

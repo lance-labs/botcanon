@@ -1,4 +1,9 @@
 #!/bin/sh
-# Block pushes whose history contains secrets.
-command -v gitleaks >/dev/null 2>&1 || { echo "pre-push: gitleaks not installed (see README)" >&2; exit 1; }
+# Secret scan before push. Fails closed: no gitleaks means no push.
+if ! command -v gitleaks >/dev/null 2>&1; then
+  echo "pre-push: BLOCKED - gitleaks is not installed, so this push was not scanned for secrets." >&2
+  echo "  Install: https://github.com/gitleaks/gitleaks#installing (brew install gitleaks, or the release binary on PATH)" >&2
+  echo "  Then retry. Do not bypass with --no-verify." >&2
+  exit 1
+fi
 exec gitleaks git --redact --no-banner
