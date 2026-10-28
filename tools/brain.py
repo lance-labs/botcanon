@@ -654,6 +654,7 @@ def main() -> int:
     v = sub.add_parser("verify"); v.add_argument("--json", action="store_true")
     sub.add_parser("status")
     an = sub.add_parser("answer"); an.add_argument("query")
+    an.add_argument("--spans", action="store_true", help="print verified candidate lines for the agent's check")
     w = sub.add_parser("why"); w.add_argument("query")
     pr = sub.add_parser("propose"); pr.add_argument("text"); pr.add_argument("--from-agent", required=True)
     pr.add_argument("--source", required=True)
@@ -670,10 +671,15 @@ def main() -> int:
     elif a.cmd == "verify":
         return 0 if verify(a.json) else 1
     elif a.cmd == "answer":
-        r = answer(a.query)
+        from cite import cited_answer
+        r = cited_answer(a.query)
         print(r["answer"])
+        if r.get("citation"):
+            print(f"  quote: {r['citation']} (verified in file)")
         for s_ in r["sources"]:
             print(f"  source: {s_}")
+        for c in r["candidates"] if a.spans else []:
+            print(f'  candidate: {c["path"]}:{c["line"]} "{c["quote"]}" (in file; coverage {c["coverage"]})')
         return 0 if r["known"] else 2
     elif a.cmd == "why":
         print(json.dumps(why(a.query), indent=2))

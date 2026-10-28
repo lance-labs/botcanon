@@ -31,7 +31,8 @@ def call(name: str, a: dict):
     if name == "search":
         return brain.search(a["query"], int(a.get("k", 5)))
     if name == "answer":
-        return brain.answer(a["query"])
+        from cite import cited_answer
+        return cited_answer(a["query"])
     if name == "compile":
         return brain.compile_entity(a["entity"])
     if name == "why":

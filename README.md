@@ -62,7 +62,7 @@ Ranking reads the status first. If a note has none, it falls back to the folder 
 2. **Semantic (meaning).** Each chunk is embedded with `BAAI/bge-small-en-v1.5` (384-dimensional, runs on CPU). The query is embedded with the prefix `Represent this sentence for searching relevant passages: `, and chunks are ranked by cosine similarity. This finds "when do we close" in a note that says "closes Mondays".
 3. **Fusion.** The lexical, semantic and title lists (40 candidates each) are merged by Reciprocal Rank Fusion: each list contributes `1 / (60 + rank)`. The sum is multiplied by the note's authority weight (below), and at most 2 chunks per note are kept.
 4. **Rerank.** The top 20 are re-scored by a cross-encoder (`Xenova/ms-marco-MiniLM-L-6-v2`), which reads the question and passage together. The final order is an equal-weight RRF of the hybrid rank and the cross-encoder rank. `BRAIN_RERANK=0` turns this off.
-5. **"I don't know".** `answer` cites a note only if the best cross-encoder score is above **-9.4**. With the reranker off, it needs a strict all-words lexical match or a cosine of at least **0.55**; a title-only or OR-only match is not enough.
+5. **"I don't know".** `answer` cites a note only if the best cross-encoder score is above **-9.4**, and then only with a quoted line (cite-and-verify, below). With the reranker off, it needs a strict all-words lexical match or a cosine of at least **0.55**; a title-only or OR-only match is not enough.
 
 ### Hierarchy and weights (from `path_weight` in `tools/brain.py`)
 
@@ -89,13 +89,26 @@ Decisions and goals edge out people and projects as a tie-breaker. The dashboard
 
 ### What this does NOT do (known limits)
 
-- **The "I don't know" gate is NOT reliable for questions about the owner's personal attributes. Callers must check the citation themselves.** In the author's real vault at the -9.4 cutoff, a confident-looking but wrong answer came back for 5 of 6 calibration questions like "what is Lance's blood type" or "who is Lance's dentist", and for **22 of 22** questions in a separate held-out set (20 "Lance + attribute" questions such as favorite color, doctor or home address, plus 2 questions about a bot the vault knows nothing about). The owner's name appears in many notes, so the reranker scores these as relevant. On general off-topic questions with no owner name, 1 of 21 got a made-up answer ("what time does Costco close"). If the cited note doesn't say it, the brain doesn't know. A redesign is in progress.
+- **The "I don't know" gate is NOT reliable for questions about the owner's personal attributes. Callers must check the citation themselves.** In the author's real vault at the -9.4 cutoff, a confident-looking but wrong answer came back for 5 of 6 calibration questions like "what is Lance's blood type" or "who is Lance's dentist", and for **22 of 22** questions in a separate held-out set (20 "Lance + attribute" questions such as favorite color, doctor or home address, plus 2 questions about a bot the vault knows nothing about). The owner's name appears in many notes, so the reranker scores these as relevant. On general off-topic questions with no owner name, 1 of 21 got a made-up answer ("what time does Costco close"). If the cited note doesn't say it, the brain doesn't know. Cite-and-verify plus rule 2 (Agent rules) brings this to 0 of 22 in the same test; the score gate alone does not.
 - It does not judge truth. It returns what the curator promoted.
 - It does not merge, summarize or reason across many notes. It returns ranked passages, and the calling agent writes the answer.
 - It is not multi-user or concurrent. Run one curator per store.
 - It indexes `.md` only. Paraphrases whose wording is far from the note can still miss the top 3; see the bench table.
 - Scores are calibrated on small stores. Re-check the -9.4 cutoff on yours with `bench.py`.
 - The reranker adds about 0.5 s per query on CPU.
+
+### Cite-and-verify
+
+`brain.py answer` returns an exact line from a cited note as `path:line "quote"`, and checks that the line is literally in the file. The line must state the question's specific attribute: at least 2/3 of its distinctive words (words in at most 25% of notes), exactly or through a close synonym (word-embedding cosine 0.75 or higher). Otherwise the answer is "I don't know". `answer --spans` also prints the top 3 verified candidate lines, so the answering agent can make the final call (rule 2 below). Code lives in `tools/cite.py`; set `BRAIN_OWNER="First Last"` so the owner's name never counts as an attribute.
+
+## Agent rules
+
+Put these in every agent's boot instructions. The numbers come from the author's real vault, measured on a held-out set written before any tuning: 22 off-topic "owner + attribute" questions (such as the owner's favorite color or doctor) and 10 answerable paraphrases.
+
+1. **Check the second brain before stating facts about the owner. Chat memory is a hint, not proof.** Memory feels confident whether or not it is right. So does search: with the score cutoff alone, 22 of 22 off-topic owner questions got a confident-looking wrong answer. Only a cited note counts.
+2. **Answer only from a quoted line in the cited note that states the fact. Otherwise say "I don't know".** This is the rule that fixed the gate. The quote check in code alone cut made-up answers from 22/22 to 1/22, but it said "I don't know" to 5 of 10 real questions, because notes word things differently ("son" vs the son's name). With an agent judging the verified candidate lines under this rule, the result was **0 of 22 made up and 1 of 10 false "I don't know"**. A related line ("Durable identity (accounts, emails)") is not an answer to "what is the owner's bank account number".
+3. **File lasting facts and decisions to `inbox/` with source and date. Never write canon directly (the curator is the exception).** `propose` writes `status: proposed`, which ranks at 0.1, and `verify` fails if a proposed note sits in canon. One reviewer keeps canon consistent, the log records who said what, and unreviewed text can't outrank a decision.
+4. **Before ending substantial work, update your HANDOFF note (`templates/HANDOFF.md`) with current work, next step and open items, each with its source file.** Session state isn't in the brain by design. In the pilot, "what is the bot working on right now" and "what is its next step" correctly got "I don't know" from the brain. The HANDOFF is the only place that state lives. Sources make it checkable at the next boot, and keeping it out of the index stops stale working notes from being quoted as facts.
 
 ## Quickstart
 
@@ -220,7 +233,7 @@ This works with any agent that can run a shell command. One worked example is Gr
 
 ## CI
 
-`.github/workflows/ci.yml` runs on every push and pull request: gitleaks over full history, hook install, ingest, verify, the MCP end-to-end test, and `bench.py` followed by `git diff --exit-code README.md`, so the published results table cannot drift from the code. Releases are tagged (`v0.4.0`); see `CHANGELOG.md`.
+`.github/workflows/ci.yml` runs on every push and pull request: gitleaks over full history, hook install, ingest, verify, the MCP end-to-end test, and `bench.py` followed by `git diff --exit-code README.md`, so the published results table cannot drift from the code. Releases are tagged (`v0.5.0`); see `CHANGELOG.md`.
 
 ## Secret scanning
 

@@ -2,6 +2,12 @@
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follow [SemVer](https://semver.org/); retrieval-quality changes are noted with their bench numbers.
 
+## [0.5.0] - 2026-10-28
+### Added
+- Cite-and-verify (`tools/cite.py`): `answer` returns `path:line "quote"` verified in the file, and says I don't know unless the line states the asked attribute. `answer --spans` prints verified candidate lines. MCP `answer` uses it.
+- README "Agent rules" (4 rules, each tied to measured results) and `templates/HANDOFF.md`.
+- Measured in the author's vault (held-out, never tuned on): made-up answers 22/22 with the score gate alone, 1/22 code-only, 0/22 with an agent following rule 2. False I don't know: 0/10, 5/10, 1/10.
+
 ## [0.4.1] - 2026-10-28
 ### Changed
 - README known limits: the "I don't know" gate is NOT reliable for questions about the owner's personal attributes. Measured in the author's vault at -9.4: 5/6 calibration questions and 22/22 held-out "owner + attribute" questions got made-up answers. Callers must check the citation.
