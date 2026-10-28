@@ -1,0 +1,24 @@
+# Public benchmark questions for the sample vault. Fixed, published, and NOT used for tuning.
+# expect_path = the note that answers it. expect_empty = the vault has no answer.
+questions:
+  - {q: "Ari Novak", expect_path: people/ari-novak.md}
+  - {q: "which mill do we buy flour from", expect_path: people/ari-novak.md}
+  - {q: "flour delivery day", expect_path: people/ari-novak.md}
+  - {q: "volume discount on flour", expect_path: people/ari-novak.md}
+  - {q: "Dana Okafor", expect_path: people/dana-okafor.md}
+  - {q: "who does the books", expect_path: people/dana-okafor.md}
+  - {q: "oven budget ceiling", expect_path: projects/new-oven.md}
+  - {q: "can the electrical panel handle the new oven", expect_path: projects/new-oven.md}
+  - {q: "two-deck electric model", expect_path: projects/new-oven.md}
+  - {q: "Hilltop Market", expect_path: projects/farmers-market.md}
+  - {q: "what travels well to the market", expect_path: projects/farmers-market.md}
+  - {q: "what are our opening hours now", expect_path: decisions/2026-03-01-opening-hours.md}
+  - {q: "are we open on Tuesdays", expect_path: decisions/2026-03-01-opening-hours.md}
+  - {q: "sourdough loaf price", expect_path: decisions/2026-02-01-pricing.md}
+  - {q: "when do we raise prices", expect_path: decisions/2026-02-01-pricing.md}
+  - {q: "should we use more than one flour mill", expect_path: decisions/2026-02-15-supplier.md}
+  - {q: "food cost target percentage", expect_path: GOALS.md}
+  - {q: "who may edit canon", expect_path: GOALS.md}
+  - {q: "what is our cryptocurrency strategy", expect_empty: true}
+  - {q: "lattice gauge theory", expect_empty: true}
+  - {q: "employee dental plan", expect_empty: true}

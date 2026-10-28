@@ -254,10 +254,63 @@ def search(q: str, k: int = 5, mode: str = "hybrid") -> list[dict]:
         if per.get(r["path"], 0) >= MAX_HITS_PER_NOTE:
             continue
         per[r["path"]] = per.get(r["path"], 0) + 1
-        out.append({"score": round(sc, 6), "path": r["path"], "heading": r["heading"], "snippet": r["text"][:200]})
+        out.append({"chunk_id": cid, "score": round(sc, 6), "path": r["path"], "heading": r["heading"], "snippet": r["text"][:200]})
         if len(out) >= k:
             break
     return out
+
+
+# ---------------------------------------------------------------- answer / provenance / propose
+
+def answer(q: str) -> dict:
+    """Cite the best note, or say 'I don't know' when nothing clears the threshold.
+
+    Confident = a lexical match on the content words, or a semantic match >= SEM_MIN.
+    Title-only or OR-fallback-only hits are not enough on their own.
+    """
+    conn = connect()
+    toks = content_tokens(q)
+    strict = set(_fts(conn, " AND ".join(toks))) if toks else set()
+    sem = set(semantic(conn, q))
+    hits = [h for h in search(q, k=5) if h["chunk_id"] in strict | sem]
+    if not hits:
+        return {"known": False, "answer": "I don't know: nothing in the vault clears the threshold.", "sources": []}
+    top = hits[0]
+    return {"known": True, "answer": top["snippet"], "sources": [h["path"] for h in hits[:3]]}
+
+
+FRONT_RE = re.compile(r"^-\s*(From|Source|Date|Owner):\s*(.+)$", re.MULTILINE)
+
+
+def why(q: str) -> dict:
+    """Provenance: where the best-matching note and its log claims came from."""
+    hits = search(q, k=1)
+    if not hits:
+        return {"found": False, "reason": "I don't know: no note matches."}
+    path = hits[0]["path"]
+    text = (VAULT / path).read_text()
+    fields = {k.lower(): v.strip() for k, v in FRONT_RE.findall(text)}
+    claims = [c for c in read_log(VAULT) if c.get("canon") == path]
+    return {"found": True, "path": path, "fields": fields,
+            "claims": [{k: c.get(k) for k in ("id", "ts", "from_agent", "source", "text")} for c in claims]}
+
+
+SLUG_RE = re.compile(r"[^a-z0-9]+")
+
+
+def propose(text: str, from_agent: str, source: str, vault: Path = None) -> Path:
+    """Agents never write canon. A proposal is a dated inbox file with provenance."""
+    vault = vault or VAULT
+    if not text.strip() or not from_agent.strip() or not source.strip():
+        raise ValueError("text, from_agent and source are all required")
+    inbox = vault / "inbox"
+    inbox.mkdir(exist_ok=True)
+    now = datetime.now(timezone.utc)
+    slug = SLUG_RE.sub("-", text.lower())[:40].strip("-") or "note"
+    p = inbox / f"{now:%Y-%m-%dT%H%M%S}-{slug}.md"
+    p.write_text(f"---\nfrom_agent: {json.dumps(from_agent)}\nsource: {json.dumps(source)}\n"
+                 f"date: {now.isoformat()}\n---\n\n{text.strip()}\n")
+    return p
 
 
 # ---------------------------------------------------------------- compile
@@ -382,6 +435,28 @@ def freshness_fixture() -> tuple[bool, str]:
     return True, "past revisit yellow, standing green, stale index red"
 
 
+def feature_fixture() -> tuple[bool, str]:
+    """answer says I don't know on nonsense; why carries provenance; propose writes inbox only."""
+    errs = []
+    if answer("zxqv blorptastic quantum chromodynamics")["known"]:
+        errs.append("answer did not say I don't know")
+    if not answer("who supplies our flour")["known"]:
+        errs.append("answer missed a known fact")
+    w = why("opening hours")
+    if not w.get("found") or not w["fields"].get("source") or not w["fields"].get("from"):
+        errs.append(f"why lacks provenance: {w}")
+    with tempfile.TemporaryDirectory() as d:
+        p = propose("Rye flour arrives Fridays.", "test-agent", "unit test", Path(d))
+        written = [x.relative_to(d).as_posix() for x in Path(d).rglob("*") if x.is_file()]
+        if written != [p.relative_to(d).as_posix()] or not written[0].startswith("inbox/") or "from_agent" not in p.read_text():
+            errs.append(f"propose wrote {written}")
+        try:
+            propose("x", "", "y", Path(d)); errs.append("propose accepted empty from_agent")
+        except ValueError:
+            pass
+    return (not errs, "; ".join(errs) or "answer/why/propose behave")
+
+
 # ---------------------------------------------------------------- verify
 
 def load_tests() -> dict:
@@ -423,6 +498,8 @@ def verify(as_json: bool = False) -> bool:
     conn = connect()
     fr = freshness(last_index_ts=meta(conn, "last_index_ts"))
     checks = {"authority_fixture": authority_fixture(), "freshness_fixture": freshness_fixture(), "hooks": hooks_installed()}
+    if VAULT == TOOLS.parent:  # sample-vault features; other stores skip this
+        checks["feature_fixture"] = feature_fixture()
     ok = all(r["ok"] for r in results) and recall >= floor and fr["level"] != "red" and all(c[0] for c in checks.values())
     if as_json:
         print(json.dumps({"ok": ok, "recall_at_5": recall, "results": results, "freshness": fr,
@@ -477,8 +554,8 @@ def flush(message: str, push: bool = True) -> int:
     if (VAULT / ".git").is_dir():
         git("add", "-A")
         c = git("commit", "-m", message)
-        if c.returncode not in (0, 1):
-            print(c.stdout + c.stderr)
+        if c.returncode != 0 and "nothing to commit" not in c.stdout:
+            print("flush: git commit failed (set git user.name/user.email?):\n" + c.stdout + c.stderr)
             return 1
         if push and git("remote").stdout.strip():
             p = git("push")
@@ -519,6 +596,10 @@ def main() -> int:
     c = sub.add_parser("compile"); c.add_argument("entity")
     v = sub.add_parser("verify"); v.add_argument("--json", action="store_true")
     sub.add_parser("status")
+    an = sub.add_parser("answer"); an.add_argument("query")
+    w = sub.add_parser("why"); w.add_argument("query")
+    pr = sub.add_parser("propose"); pr.add_argument("text"); pr.add_argument("--from-agent", required=True)
+    pr.add_argument("--source", required=True)
     f = sub.add_parser("flush"); f.add_argument("-m", default="flush"); f.add_argument("--no-push", action="store_true")
     a = ap.parse_args()
     set_root(a.root, a.tests, a.dirs)
@@ -531,6 +612,16 @@ def main() -> int:
         print(format_compile(compile_entity(a.entity)))
     elif a.cmd == "verify":
         return 0 if verify(a.json) else 1
+    elif a.cmd == "answer":
+        r = answer(a.query)
+        print(r["answer"])
+        for s_ in r["sources"]:
+            print(f"  source: {s_}")
+        return 0 if r["known"] else 2
+    elif a.cmd == "why":
+        print(json.dumps(why(a.query), indent=2))
+    elif a.cmd == "propose":
+        print(propose(a.text, a.from_agent, a.source))
     elif a.cmd == "status":
         print(json.dumps(status(), indent=2))
     elif a.cmd == "flush":
