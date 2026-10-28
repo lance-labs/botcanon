@@ -2,6 +2,15 @@
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follow [SemVer](https://semver.org/); retrieval-quality changes are noted with their bench numbers.
 
+## [0.4.0] - 2026-10-28
+### Added
+- README "How it works": data-flow diagram, storage (Markdown / SQLite / JSONL) with reasons, lexical + semantic search, RRF, rerank, the "I don't know" gate, the weights table from `path_weight`, freshness/flush/verify/CI, and known limits.
+- Explicit `status: proposed|approved|superseded` on notes. Ranking reads it (folder and `Prior:` fallback); `verify` checks it (`status_check` + fixture). `tools/note_status.py`, `tools/migrate_status.py`. `propose` writes `status: proposed`.
+### Changed
+- Index schema version 2: the status line is no longer indexed (forces one full rebuild).
+### Known limits
+- The "I don't know" gate can be fooled by "<owner name> + generic word" questions (measured 5/6 in the author's vault). Gate redesign is tracked separately.
+
 ## [0.3.0] - 2026-10-28
 ### Added
 - Second-pass cross-encoder reranker (`Xenova/ms-marco-MiniLM-L-6-v2`) over the top 20 hybrid hits, blended with the hybrid rank by RRF. On by default; `BRAIN_RERANK=0` turns it off.

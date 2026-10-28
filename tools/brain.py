@@ -20,12 +20,15 @@ from pathlib import Path
 
 import numpy as np
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from note_status import STATUS_RE, read_status, status_check, status_fixture  # noqa: E402
+
 TOOLS = Path(__file__).resolve().parent
 VAULT = Path(os.environ.get("BRAIN_VAULT", TOOLS.parent)).resolve()
 INDEX_DIR = VAULT / ".index"
 DB_PATH = INDEX_DIR / "brain.db"
 TESTS = TOOLS / "retrieval_tests.yaml"
-SCHEMA_VERSION = "1"
+SCHEMA_VERSION = "2"  # bump when indexed text changes; forces a full rebuild
 EMBED_MODEL = os.environ.get("BRAIN_EMBED_MODEL", "BAAI/bge-small-en-v1.5")
 
 CANON_DIRS = tuple(os.environ.get("BRAIN_DIRS", "decisions,people,projects").split(","))
@@ -95,10 +98,24 @@ def superseded(vault: Path = None) -> set[str]:
     return out
 
 
+_STATUS: dict[str, str | None] = {}
+
+
+def status_of(path: str) -> str | None:
+    """Explicit `- Status:` of a note (proposed | approved | superseded), or None."""
+    if path not in _STATUS:
+        fp = VAULT / path
+        _STATUS[path] = read_status(fp.read_text()) if fp.is_file() else None
+    return _STATUS[path]
+
+
 def path_weight(path: str, sup: set[str]) -> float:
-    """Authority ranking. Decisions win ties; superseded, log and inbox sink."""
+    """Authority ranking. Explicit status first, then folder + Prior: fallback."""
+    st = status_of(path)
+    if st in ("superseded", "proposed"):
+        return 0.1
     if path.startswith("decisions/"):
-        return 0.1 if path in sup else 1.02
+        return 0.1 if (st is None and path in sup) else 1.02
     if path == "GOALS.md":
         return 1.02
     if path.startswith(("people/", "projects/")):
@@ -172,7 +189,7 @@ def ingest(full: bool = False) -> dict:
         changed += 1
         _drop(conn, r)
         title = note_title(text, p)
-        parts = chunk_note(text)
+        parts = chunk_note(STATUS_RE.sub("", text))  # status is ranking metadata, not content
         vecs = EMB.embed([f"{h}\n{b}" for h, b in parts]) if parts else []
         for (h, b), v in zip(parts, vecs):
             cur = conn.execute("INSERT INTO chunks(path,heading,text,emb) VALUES(?,?,?,?)", (r, h, b, v.tobytes()))
@@ -346,7 +363,7 @@ def propose(text: str, from_agent: str, source: str, vault: Path = None) -> Path
     now = datetime.now(timezone.utc)
     slug = SLUG_RE.sub("-", text.lower())[:40].strip("-") or "note"
     p = inbox / f"{now:%Y-%m-%dT%H%M%S}-{slug}.md"
-    p.write_text(f"---\nfrom_agent: {json.dumps(from_agent)}\nsource: {json.dumps(source)}\n"
+    p.write_text(f"---\nstatus: proposed\nfrom_agent: {json.dumps(from_agent)}\nsource: {json.dumps(source)}\n"
                  f"date: {now.isoformat()}\n---\n\n{text.strip()}\n")
     return p
 
@@ -535,7 +552,9 @@ def verify(as_json: bool = False) -> bool:
     recall = hit5 / n5 if n5 else 1.0
     conn = connect()
     fr = freshness(last_index_ts=meta(conn, "last_index_ts"))
-    checks = {"authority_fixture": authority_fixture(), "freshness_fixture": freshness_fixture(), "hooks": hooks_installed()}
+    st_ok, st_errs = status_check(VAULT, canon_files(), superseded())
+    checks = {"status_check": (st_ok, f"{len(canon_files())} canon notes" + ("" if st_ok else ": " + "; ".join(st_errs[:5]))),
+              "status_fixture": status_fixture(), "authority_fixture": authority_fixture(), "freshness_fixture": freshness_fixture(), "hooks": hooks_installed()}
     if VAULT == TOOLS.parent:  # sample-vault features; other stores skip this
         checks["feature_fixture"] = feature_fixture()
     ok = all(r["ok"] for r in results) and recall >= floor and fr["level"] != "red" and all(c[0] for c in checks.values())

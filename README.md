@@ -20,6 +20,83 @@ What this kit does about each:
 
 It is for one person, or a small team, who runs several AI agents and wants them to share a memory they can audit.
 
+## How it works
+
+In one sentence: agents *propose* facts, a curator *promotes* the good ones into plain Markdown files, and a small rebuildable SQLite index answers questions over those files with two kinds of search, a second-pass check, and an honest "I don't know".
+
+```mermaid
+flowchart LR
+  A[Agent or person] -->|propose| I[inbox/*.md<br/>status: proposed]
+  I -->|curator promotes| C[Markdown canon<br/>decisions/ people/ projects/ GOALS.md<br/>status: approved]
+  I -->|every promotion| L[log/*.jsonl<br/>append-only]
+  C -->|flush: ingest + verify| S[(SQLite index<br/>.index/)]
+  L -.->|provenance| S
+  Q[Question] --> H[Hybrid search<br/>lexical BM25 + semantic cosine<br/>+ title match, fused by RRF]
+  S --> H
+  H --> R[Cross-encoder rerank<br/>top 20]
+  R -->|best score > -9.4| ANS[Answer + cited note]
+  R -->|otherwise| IDK["I don't know"]
+```
+
+### Storage, and why each piece
+
+| Piece | What it holds | Why |
+|---|---|---|
+| **Markdown** (`decisions/`, `people/`, `projects/`, `GOALS.md`, `CURRENT.md`) | The source of truth. One fact or decision per note, with a `status:` line. | A person can read, edit, diff and review it in git with no tools. If every other piece is deleted, nothing is lost. |
+| **SQLite** (`.index/brain.db`) | `notes(path, sha, title)`: sha256 of each file, so re-indexing touches only changed notes. `chunks(id, path, heading, text, emb)`: each note split by heading, with its embedding stored as a float32 BLOB. `fts`: an FTS5 full-text table over text, heading and title. `meta`: index time and schema version. | One file, no server, fast. It is **derived**: delete `.index/` and `ingest --full` rebuilds it exactly. A schema-version bump forces a full rebuild. |
+| **JSONL** (`log/YYYY-MM.jsonl`) | An append-only log of every promoted claim. Fields: `id`, `ts`, `type`, `entity`, `text`, `from_agent`, `source`, `canon` (the note it landed in) and `successor` (the claim that replaced it). | History and provenance without rewriting notes. You can see who said what, when, and what overrode it. Lines are never edited. |
+
+### Note status
+
+Every canon note carries `status: proposed | approved | superseded` (frontmatter `status:` or a `- Status:` bullet).
+
+- `inbox/` notes are `proposed`; `propose` writes this for you.
+- Promoted notes are `approved`.
+- A decision named on a newer decision's `Prior:` line is `superseded`.
+
+Ranking reads the status first. If a note has none, it falls back to the folder and the `Prior:` lines. `verify` fails if a canon note is missing a status, has an invalid one, is still `proposed`, or if `superseded` notes and `Prior:` lines disagree. `tools/migrate_status.py` adds the field to an existing store; it is idempotent, and `--check` only reports.
+
+### Two kinds of search, then a second pass
+
+1. **Lexical (exact words).** SQLite FTS5 with BM25 ranking. Common words (a stopword list) are stripped. It first requires all remaining words (AND). If that finds nothing and the query has more than one word, it retries with any word (OR). A separate pass matches words against note **titles** only.
+2. **Semantic (meaning).** Each chunk is embedded with `BAAI/bge-small-en-v1.5` (384-dimensional, runs on CPU). The query is embedded with the prefix `Represent this sentence for searching relevant passages: `, and chunks are ranked by cosine similarity. This finds "when do we close" in a note that says "closes Mondays".
+3. **Fusion.** The lexical, semantic and title lists (40 candidates each) are merged by Reciprocal Rank Fusion: each list contributes `1 / (60 + rank)`. The sum is multiplied by the note's authority weight (below), and at most 2 chunks per note are kept.
+4. **Rerank.** The top 20 are re-scored by a cross-encoder (`Xenova/ms-marco-MiniLM-L-6-v2`), which reads the question and passage together. The final order is an equal-weight RRF of the hybrid rank and the cross-encoder rank. `BRAIN_RERANK=0` turns this off.
+5. **"I don't know".** `answer` cites a note only if the best cross-encoder score is above **-9.4**. With the reranker off, it needs a strict all-words lexical match or a cosine of at least **0.55**; a title-only or OR-only match is not enough.
+
+### Hierarchy and weights (from `path_weight` in `tools/brain.py`)
+
+| Note | Weight |
+|---|---|
+| `decisions/` (current) | 1.02 |
+| `GOALS.md` | 1.02 |
+| `people/`, `projects/` | 1.0 |
+| `CURRENT.md` (derived dashboard) | 0.4 |
+| `status: superseded` or `status: proposed` | 0.1 |
+| superseded decision (named on a newer `Prior:` line, no status) | 0.1 |
+| anything else (`log/`, `inbox/`) | 0.1 |
+
+Decisions and goals edge out people and projects as a tie-breaker. The dashboard never outranks the notes it summarizes, and old or unreviewed material sinks without disappearing.
+
+**OUTRANKED and SUPERSEDED.** `provenance` (`context` over MCP) returns the current decision first. Log claims dated before that decision are listed as OUTRANKED, and decisions replaced through `Prior:` are listed as SUPERSEDED. Old facts stay visible, but labeled, so an agent can't quote them as current.
+
+### Freshness, flush, verify, CI
+
+- **RED** (verify fails): a canon note is newer than the index, the store was never indexed, or an inbox item is older than 48 h.
+- **YELLOW** (warning): a decision is past its `Revisit:` date.
+- **`flush`** = ingest, then verify, then commit. Write canon only through it. **`verify`** runs every golden question in `retrieval_tests.yaml` and requires recall@5 ≥ 0.9, freshness not RED, and the built-in checks to pass (status, supersession, freshness fixtures).
+- **CI** (`.github/workflows/ci.yml`, on every push and pull request): gitleaks over full history, hook install, ingest, verify (fact store and novel example), the MCP end-to-end test, and `bench.py` followed by `git diff --exit-code README.md`, so the results table can't drift from the code.
+
+### What this does NOT do (known limits)
+
+- **The "I don't know" gate can be fooled by "<owner name> + generic word" questions.** In the author's real vault at the -9.4 cutoff, 5 of 6 questions like "what is Lance's blood type" or "who is Lance's dentist" got a confident-looking but wrong answer, because the owner's name appears in many notes. On general off-topic questions with no owner name, 3 of 21 got made-up answers (for example "what time does Costco close"). Treat the citation as the answer: if the cited note doesn't say it, the brain doesn't know. A redesign is in progress.
+- It does not judge truth. It returns what the curator promoted.
+- It does not merge, summarize or reason across many notes. It returns ranked passages, and the calling agent writes the answer.
+- It is not multi-user or concurrent. Run one curator per store.
+- It indexes `.md` only. Paraphrases whose wording is far from the note can still miss the top 3; see the bench table.
+- Scores are calibrated on small stores. Re-check the -9.4 cutoff on yours with `bench.py`.
+- The reranker adds about 0.5 s per query on CPU.
+
 ## Quickstart
 
 ```sh
@@ -143,7 +220,7 @@ This works with any agent that can run a shell command. One worked example is Gr
 
 ## CI
 
-`ci/github-actions.yml` is a ready GitHub Actions workflow. Enable it with `mkdir -p .github/workflows && cp ci/github-actions.yml .github/workflows/ci.yml` and push with a token that has `workflow` scope (or add the file in the GitHub web UI). It runs on every push and pull request: gitleaks over full history, hook install, ingest, verify, the MCP end-to-end test, and `bench.py` followed by `git diff --exit-code README.md`, so the published results table cannot drift from the code. Releases are tagged (`v0.2.0`); see `CHANGELOG.md`.
+`.github/workflows/ci.yml` runs on every push and pull request: gitleaks over full history, hook install, ingest, verify, the MCP end-to-end test, and `bench.py` followed by `git diff --exit-code README.md`, so the published results table cannot drift from the code. Releases are tagged (`v0.4.0`); see `CHANGELOG.md`.
 
 ## Secret scanning
 

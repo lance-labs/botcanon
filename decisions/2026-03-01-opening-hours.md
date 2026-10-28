@@ -1,5 +1,6 @@
 # Decision: Opening hours (spring)
 
+- Status: approved
 - Date: 2026-03-01
 - Owner: Owner
 - From: curator

@@ -1,5 +1,7 @@
 # Project: Farmers market stall
 
+- Status: approved
+
 ## Status
 Saturday stall at Riverside Market is running. A Wednesday stall at Hilltop Market is planned.
 

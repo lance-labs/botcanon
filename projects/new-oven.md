@@ -1,5 +1,7 @@
 # Project: New deck oven
 
+- Status: approved
+
 ## Status
 Three quotes collected. The two-deck electric model is the front runner.
 

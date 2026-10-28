@@ -1,5 +1,7 @@
 # Ari Novak
 
+- Status: approved
+
 Flour supplier, owner of Stonegate Mill.
 
 - Delivers organic bread flour every Monday.

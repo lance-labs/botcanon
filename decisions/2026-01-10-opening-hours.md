@@ -1,5 +1,6 @@
 # Decision: Opening hours (winter)
 
+- Status: superseded
 - Date: 2026-01-10
 - Owner: Owner
 - From: curator

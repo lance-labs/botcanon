@@ -1,5 +1,7 @@
 # Goals
 
+- Status: approved
+
 Sample vault for Juniper Bakery, a fictional neighborhood bakery.
 
 ## This year
