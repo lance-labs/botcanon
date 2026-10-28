@@ -89,7 +89,7 @@ Decisions and goals edge out people and projects as a tie-breaker. The dashboard
 
 ### What this does NOT do (known limits)
 
-- **The "I don't know" gate can be fooled by "<owner name> + generic word" questions.** In the author's real vault at the -9.4 cutoff, 5 of 6 questions like "what is Lance's blood type" or "who is Lance's dentist" got a confident-looking but wrong answer, because the owner's name appears in many notes. On general off-topic questions with no owner name, 3 of 21 got made-up answers (for example "what time does Costco close"). Treat the citation as the answer: if the cited note doesn't say it, the brain doesn't know. A redesign is in progress.
+- **The "I don't know" gate is NOT reliable for questions about the owner's personal attributes. Callers must check the citation themselves.** In the author's real vault at the -9.4 cutoff, a confident-looking but wrong answer came back for 5 of 6 calibration questions like "what is Lance's blood type" or "who is Lance's dentist", and for **22 of 22** questions in a separate held-out set (20 "Lance + attribute" questions such as favorite color, doctor or home address, plus 2 questions about a bot the vault knows nothing about). The owner's name appears in many notes, so the reranker scores these as relevant. On general off-topic questions with no owner name, 1 of 21 got a made-up answer ("what time does Costco close"). If the cited note doesn't say it, the brain doesn't know. A redesign is in progress.
 - It does not judge truth. It returns what the curator promoted.
 - It does not merge, summarize or reason across many notes. It returns ranked passages, and the calling agent writes the answer.
 - It is not multi-user or concurrent. Run one curator per store.

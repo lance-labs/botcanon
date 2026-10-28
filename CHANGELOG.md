@@ -2,6 +2,10 @@
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follow [SemVer](https://semver.org/); retrieval-quality changes are noted with their bench numbers.
 
+## [0.4.1] - 2026-10-28
+### Changed
+- README known limits: the "I don't know" gate is NOT reliable for questions about the owner's personal attributes. Measured in the author's vault at -9.4: 5/6 calibration questions and 22/22 held-out "owner + attribute" questions got made-up answers. Callers must check the citation.
+
 ## [0.4.0] - 2026-10-28
 ### Added
 - README "How it works": data-flow diagram, storage (Markdown / SQLite / JSONL) with reasons, lexical + semantic search, RRF, rerank, the "I don't know" gate, the weights table from `path_weight`, freshness/flush/verify/CI, and known limits.
