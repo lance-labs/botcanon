@@ -19,6 +19,17 @@ questions:
   - {q: "should we use more than one flour mill", expect_path: decisions/2026-02-15-supplier.md}
   - {q: "food cost target percentage", expect_path: GOALS.md}
   - {q: "who may edit canon", expect_path: GOALS.md}
+  # Paraphrase questions (added 2026-10-28): indirect, plain English, no names or titles.
+  - {q: "when should I get my order in so it arrives next week", expect_path: people/ari-novak.md}
+  - {q: "who handles reconciling our accounts each month", expect_path: people/dana-okafor.md}
+  - {q: "how much can we spend on the baking equipment upgrade", expect_path: projects/new-oven.md}
+  - {q: "is the wiring good enough before we buy", expect_path: projects/new-oven.md}
+  - {q: "which saturday market are we at right now", expect_path: projects/farmers-market.md}
+  - {q: "what goods hold up best on a long drive to a stall", expect_path: projects/farmers-market.md}
+  - {q: "what time do we close in the afternoon", expect_path: decisions/2026-03-01-opening-hours.md}
+  - {q: "how much does a loaf cost", expect_path: decisions/2026-02-01-pricing.md}
+  - {q: "is it ok to split purchases between several suppliers", expect_path: decisions/2026-02-15-supplier.md}
+  - {q: "what share of revenue can ingredients eat up", expect_path: GOALS.md}
   - {q: "what is our cryptocurrency strategy", expect_empty: true}
   - {q: "lattice gauge theory", expect_empty: true}
   - {q: "employee dental plan", expect_empty: true}
