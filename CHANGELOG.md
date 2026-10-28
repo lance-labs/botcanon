@@ -2,6 +2,14 @@
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follow [SemVer](https://semver.org/); retrieval-quality changes are noted with their bench numbers.
 
+## [0.3.0] - 2026-10-28
+### Added
+- Second-pass cross-encoder reranker (`Xenova/ms-marco-MiniLM-L-6-v2`) over the top 20 hybrid hits, blended with the hybrid rank by RRF. On by default; `BRAIN_RERANK=0` turns it off.
+- `answer` uses the reranker score for "I don't know" (floor -9.4).
+- Bench rows with and without the reranker. Public set: Hit@1 0.75 to 0.79, MRR 0.84 to 0.86. With the gate: no-answer correct 0.67 to 1.00, Hit@5 0.93 to 0.89.
+### Changed
+- Search latency rises from tens of ms to ~0.5 s per query (CPU).
+
 ## [0.2.0] - 2026-10-28
 ### Added
 - "The problem" section at the top of the README.

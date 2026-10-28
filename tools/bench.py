@@ -7,6 +7,7 @@ Writes the results table into README.md between the BENCH markers. Re-run after 
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import sys
 from pathlib import Path
@@ -33,11 +34,21 @@ def plain_embeddings(q: str, k: int = 5) -> list[str]:
     return out
 
 
+def _no_rr(fn):
+    os.environ["BRAIN_RERANK"] = "0"
+    try:
+        return fn()
+    finally:
+        os.environ.pop("BRAIN_RERANK", None)
+
+
 SYSTEMS = {
     "plain embeddings (baseline)": plain_embeddings,
     "lexical FTS5 only": lambda q: [h["path"] for h in brain.search(q, 5, "lexical")],
-    "hybrid (this repo)": lambda q: [h["path"] for h in brain.search(q, 5, "hybrid")],
-    "hybrid + answer gate": lambda q: brain.answer(q)["sources"],
+    "hybrid, no rerank": lambda q: _no_rr(lambda: [h["path"] for h in brain.search(q, 5, "hybrid")]),
+    "hybrid, no rerank + answer gate": lambda q: _no_rr(lambda: brain.answer(q)["sources"]),
+    "hybrid + rerank (this repo)": lambda q: [h["path"] for h in brain.search(q, 5, "hybrid")],
+    "hybrid + rerank + answer gate": lambda q: brain.answer(q)["sources"],
 }
 
 

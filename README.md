@@ -69,17 +69,20 @@ Public set: 28 answerable + 3 no-answer questions (`evals/public_set.yaml`).
 |---|---:|---:|---:|---:|
 | plain embeddings (baseline) | 0.75 | 0.96 | 0.85 | 0.00 |
 | lexical FTS5 only | 0.68 | 0.79 | 0.73 | 0.67 |
-| hybrid (this repo) | 0.75 | 0.96 | 0.84 | 0.67 |
-| hybrid + answer gate | 0.75 | 0.93 | 0.83 | 0.67 |
+| hybrid, no rerank | 0.75 | 0.96 | 0.84 | 0.67 |
+| hybrid, no rerank + answer gate | 0.75 | 0.93 | 0.83 | 0.67 |
+| hybrid + rerank (this repo) | 0.79 | 0.96 | 0.86 | 0.67 |
+| hybrid + rerank + answer gate | 0.79 | 0.89 | 0.84 | 1.00 |
 <!-- BENCH:END -->
 
-The sample vault is tiny (10 notes), so these numbers show how the pieces behave. They don't predict quality on a large vault. Run the script on your own vault with your own public set. The public set is never used for tuning, so its misses stay in the table: two flour questions rank the supplier decision above the supplier's note, "who does the books" misses, and "employee dental plan" returns notes instead of nothing. Ten paraphrase questions (indirect wording, no names) were added on 2026-10-28. Before them, hybrid and lexical tied at Hit@1 0.83. With them, lexical falls to 0.68 while hybrid holds at 0.75, which is the case hybrid exists for.
+The sample vault is tiny (10 notes), so these numbers show how the pieces behave. They don't predict quality on a large vault. Run the script on your own vault with your own public set. The public set is never used for tuning, so its misses stay in the table: two flour questions rank the supplier decision above the supplier's note, "who does the books" misses, and "employee dental plan" returned notes until the reranker gate (below); with the gate on, all 3 no-answer questions now come back "I don't know", at the cost of one real question also getting "I don't know". Ten paraphrase questions (indirect wording, no names) were added on 2026-10-28. Before them, hybrid and lexical tied at Hit@1 0.83. With them, lexical falls to 0.68 while hybrid holds at 0.75, which is the case hybrid exists for.
 
 See [docs/WHY.md](docs/WHY.md) for the design essay.
 
 ## Design
 
 - **Search:** hybrid. FTS5 with BM25 and porter stemming, cosine similarity on bge-small embeddings, and a title-match list, fused with reciprocal rank fusion. Stopwords are dropped, and a full-sentence question falls back to an OR query when the strict AND query finds nothing. At most 2 hits per note. Semantic hits below a similarity floor are dropped, so a question with no answer comes back empty.
+- **Rerank:** the top 20 hybrid hits are re-scored by a local cross-encoder (`Xenova/ms-marco-MiniLM-L-6-v2`, via fastembed). The final order is an equal-weight RRF of the hybrid rank and the cross-encoder rank, so authority weights still count. `answer` says "I don't know" when the best cross-encoder logit is at or below -9.4. That cutoff was calibrated on a private 75-question vault plus off-topic questions, not on this public set. Set `BRAIN_RERANK=0` to turn it off and fall back to the lexical/cosine gate. Cost: ~0.5 s per query on 8 CPUs, plus a one-time ~80 MB model download.
 - **Authority:** decisions and GOALS win ties (+2%) over people and projects. A decision named on a newer decision's `- Prior:` line sinks to 0.1. The weights break ties; they do not override relevance.
 - **Compile:** for an entity, CURRENT is the newest non-superseded decision plus log claims dated after it. Older claims move to OUTRANKED, and claims with a `successor` move to SUPERSEDED.
 - **Freshness:**

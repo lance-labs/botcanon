@@ -236,7 +236,35 @@ def semantic(conn, q: str) -> list[int]:
     return [rows[i]["id"] for i in order if s[i] >= SEM_MIN]
 
 
+# Second-pass reranker: a local cross-encoder re-scores the top RERANK_N hybrid hits. Final order is an
+# equal-weight RRF of the hybrid rank and the cross-encoder rank, so authority weights still count.
+# Off with BRAIN_RERANK=0.
+RERANK_MODEL = os.environ.get("BRAIN_RERANK_MODEL", "Xenova/ms-marco-MiniLM-L-6-v2")
+RERANK_N = 20
+RERANK_FLOOR = -9.4  # cross-encoder logit; below it, answer() says "I don't know" (see docs/WHY.md)
+_CE = None
+
+
+def rerank_on() -> bool:
+    return os.environ.get("BRAIN_RERANK", "1").strip().lower() not in {"0", "false", "off", "no"}
+
+
+def rerank(q: str, hits: list[dict], k: int) -> list[dict]:
+    global _CE
+    if not hits:
+        return hits
+    if _CE is None:
+        from fastembed.rerank.cross_encoder import TextCrossEncoder
+        _CE = TextCrossEncoder(RERANK_MODEL)
+    scores = [float(x) for x in _CE.rerank(q, [f"{h['heading']}. {h['_text'][:1500]}" for h in hits])]
+    ce_rank = {i: r for r, i in enumerate(sorted(range(len(hits)), key=lambda i: -scores[i]))}
+    order = sorted(range(len(hits)), key=lambda i: -(1 / (RRF_K + i + 1) + 1 / (RRF_K + ce_rank[i] + 1)))
+    return [{**hits[i], "rerank": round(scores[i], 4)} for i in order[:k]]
+
+
 def search(q: str, k: int = 5, mode: str = "hybrid") -> list[dict]:
+    use_rr = mode == "hybrid" and rerank_on()
+    want = max(k, RERANK_N) if use_rr else k
     conn = connect()
     lists = {"lexical": [lexical(conn, q)], "semantic": [semantic(conn, q)]}.get(mode)
     if lists is None:
@@ -254,9 +282,14 @@ def search(q: str, k: int = 5, mode: str = "hybrid") -> list[dict]:
         if per.get(r["path"], 0) >= MAX_HITS_PER_NOTE:
             continue
         per[r["path"]] = per.get(r["path"], 0) + 1
-        out.append({"chunk_id": cid, "score": round(sc, 6), "path": r["path"], "heading": r["heading"], "snippet": r["text"][:200]})
-        if len(out) >= k:
+        out.append({"chunk_id": cid, "score": round(sc, 6), "path": r["path"], "heading": r["heading"],
+                    "snippet": r["text"][:200], "_text": r["text"]})
+        if len(out) >= want:
             break
+    if use_rr:
+        out = rerank(q, out, k)
+    for h in out:
+        h.pop("_text", None)
     return out
 
 
@@ -265,14 +298,19 @@ def search(q: str, k: int = 5, mode: str = "hybrid") -> list[dict]:
 def answer(q: str) -> dict:
     """Cite the best note, or say 'I don't know' when nothing clears the threshold.
 
-    Confident = a lexical match on the content words, or a semantic match >= SEM_MIN.
+    Reranker on (default): confident = best cross-encoder logit > RERANK_FLOOR.
+    Reranker off: confident = a lexical match on the content words, or a semantic match >= SEM_MIN.
     Title-only or OR-fallback-only hits are not enough on their own.
     """
-    conn = connect()
-    toks = content_tokens(q)
-    strict = set(_fts(conn, " AND ".join(toks))) if toks else set()
-    sem = set(semantic(conn, q))
-    hits = [h for h in search(q, k=5) if h["chunk_id"] in strict | sem]
+    res = search(q, k=5)
+    if res and "rerank" in res[0]:  # reranker on: trust the cross-encoder score
+        hits = res if max(h["rerank"] for h in res) > RERANK_FLOOR else []
+    else:
+        conn = connect()
+        toks = content_tokens(q)
+        strict = set(_fts(conn, " AND ".join(toks))) if toks else set()
+        sem = set(semantic(conn, q))
+        hits = [h for h in res if h["chunk_id"] in strict | sem]
     if not hits:
         return {"known": False, "answer": "I don't know: nothing in the vault clears the threshold.", "sources": []}
     top = hits[0]
