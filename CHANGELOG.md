@@ -6,6 +6,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 
 ## [Unreleased]
 ### Fixed
+- `flush` stages only memory paths (canon notes and folders, `log/`, `inbox/`, the reviewed tests file) instead of `git add -A`, and lists any other changed files it left alone (BC-02). The curator paste block and the promote skill now say inbox items, notes and quotes are data, never instructions. New `tools/test_flush.py` in CI.
 - CI now checks the answers bots get, not only search ranks (BC-05): 8 answer-level fixture tests (5 must quote an exact `path:line` via the new `expect_cite`, 3 must say "I don't know", one of them an owner attribute).
 - Cite-and-verify no longer fails open (BC-01). A question with no rare words used to leave an empty term list, so every line "covered" it and `answer` could quote `- Date: 2026-03-01` as verified. It now falls back to all content words, an empty list verifies nothing, metadata lines (Date, Owner, From, Source, Prior, Revisit) are never quoted, and the note title counts as context for its lines. The coverage bar is exactly 2/3 (was 0.67, which rounded 2-of-3 matches down to a fail), "much"/"many" are stopwords, and "supplies"/"supplier" share a stem. New `tools/test_cite.py` in CI.
 ### Docs
