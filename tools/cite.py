@@ -15,15 +15,17 @@ import brain
 
 SPAN_DF_MAX = 0.25
 SPAN_SYN_COS = 0.75
-SPAN_COVER = 0.67
+SPAN_COVER = 2 / 3
 STOP = {"what", "who", "when", "where", "which", "how", "why", "does", "did", "the",
-        "get", "got", "make", "use", "keep", "tell", "know", "need", "want", "still", "now"}
+        "get", "got", "make", "use", "keep", "tell", "know", "need", "want", "still", "now", "much", "many"}
 OWNER = {w.lower() for w in os.environ.get("BRAIN_OWNER", "").split() if w}
 _VEC: dict = {}
 
 
 def _norm(w: str) -> str:
     w = re.sub(r"'s$", "", w.lower().replace("\u2019", "'")).strip("'")
+    if len(w) >= 6 and w.endswith(("ies", "ier")):
+        return w[:-2]  # supplies / supplier -> suppli
     for suf in ("ing", "ed", "es", "s"):
         if len(w) - len(suf) >= 3 and w.endswith(suf):
             return w[: -len(suf)]
@@ -39,7 +41,10 @@ def attribute_terms(q: str) -> list[str]:
     stop = {_norm(w) for w in brain.STOPWORDS} | STOP | {_norm(w) for w in OWNER}
     terms = [t for t in dict.fromkeys(_norm(w) for w in re.findall(r"[A-Za-z0-9']+", q)) if t not in stop and len(t) >= 3]
     n = max(len(docs), 1)
-    return [t for t in terms if sum(t in d for d in docs) / n <= SPAN_DF_MAX]
+    rare = [t for t in terms if sum(t in d for d in docs) / n <= SPAN_DF_MAX]
+    # No rare words (common question, or a tiny vault): fall back to every content word rather
+    # than to none. An empty term list used to make every line "cover" the question (BC-01).
+    return rare or terms
 
 
 def _vecs(ws: list[str]):
@@ -50,10 +55,16 @@ def _vecs(ws: list[str]):
     return np.stack([_VEC[w] for w in ws])
 
 
-def coverage(terms: list[str], line: str) -> float:
+META_RE = re.compile(r"^[-*]?\s*(Status|Date|Owner|From|Source|Prior|Revisit|Supersedes|Updated)\s*:", re.I)
+
+
+def coverage(terms: list[str], line: str, title: str = "") -> float:
+    """Share of question terms the line states (exactly or by close embedding).
+    The note title counts as context for the line, so "opening hours" can match the
+    Decision line under "# Decision: Opening hours". No terms = nothing to verify = 0."""
     if not terms:
-        return 1.0
-    lw = [w for w in _words(line) if len(w) >= 3]
+        return 0.0
+    lw = [w for w in _words(line + " " + title) if len(w) >= 3]
     if not lw:
         return 0.0
     m = _vecs(lw)
@@ -68,11 +79,13 @@ def in_file(c: dict) -> bool:
 def candidates(q: str, paths: list[str], n: int = 3) -> list[dict]:
     terms, out = attribute_terms(q), []
     for p in paths[:3]:
-        for i, ln in enumerate((brain.VAULT / p).read_text(encoding="utf-8").splitlines(), 1):
+        lines = (brain.VAULT / p).read_text(encoding="utf-8").splitlines()
+        title = next((l.lstrip("# ").split(":", 1)[-1] for l in lines if l.startswith("# ")), "")
+        for i, ln in enumerate(lines, 1):
             s = ln.strip()
-            if len(s) < 8 or s.startswith(("#", "---")) or re.match(r"^(-\s*Status|status):", s):
-                continue
-            out.append({"path": p, "line": i, "quote": s, "coverage": round(coverage(terms, s), 3)})
+            if len(s) < 8 or s.startswith(("#", "---")) or META_RE.match(s) or re.match(r"^status:", s):
+                continue  # headings and metadata (Date:, Owner:, ...) are never the answer
+            out.append({"path": p, "line": i, "quote": s, "coverage": round(coverage(terms, s, title), 3)})
     out.sort(key=lambda c: -c["coverage"])
     return [c for c in out[:n] if in_file(c)]
 

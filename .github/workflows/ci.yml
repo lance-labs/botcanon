@@ -39,6 +39,8 @@ jobs:
           grep -q "run: python3 tools/brain.py evals init" /tmp/v.txt
       - name: evals init / accept on the fixture
         run: FASTEMBED_CACHE_PATH="$HOME/.cache/fastembed" python3 tools/test_evals.py
+      - name: Cite-and-verify quotes the stating line or abstains
+        run: FASTEMBED_CACHE_PATH="$HOME/.cache/fastembed" python3 tools/test_cite.py
       - name: Incremental re-index equals a full rebuild
         run: FASTEMBED_CACHE_PATH="$HOME/.cache/fastembed" python3 tools/test_incremental.py
       - name: MCP end-to-end
