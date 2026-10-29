@@ -6,6 +6,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 
 ## [Unreleased]
 ### Added
+- `tools/test_incremental.py` (in CI): after an edit, a delete and forced re-indexing of unchanged notes, an incremental index returns the same top-10 as a full rebuild for every fixture query in lexical, semantic and hybrid mode.
 - `expect_path` accepts a list; the test passes when any listed note is within `max_rank` (older test files use this).
 ### Fixed (test builder, from a run on a real vault: 31 of 81 proposals were usable)
 - `evals accept` refuses tests not marked `reviewed: true` (or `--all-reviewed`) and any `REWRITE:` placeholder query; exits 1 when it refuses.
