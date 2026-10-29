@@ -569,8 +569,12 @@ def verify(as_json: bool = False) -> bool:
         ok, why = True, ""
         if "expect_known" in t:  # answer-level golden: cite-and-verify must (not) find a stated line
             from cite import cited_answer
-            known = bool(cited_answer(t["query"])["known"])
-            results.append({"id": t["id"], "ok": known == bool(t["expect_known"]), "why": f"known={known}"})
+            r = cited_answer(t["query"])
+            known, cite_ = bool(r["known"]), r.get("citation", "")
+            ok = known == bool(t["expect_known"])
+            if ok and t.get("expect_cite"):  # "path:line" (or just "path") the quote must come from
+                ok = cite_.startswith(t["expect_cite"] + (":" if ":" not in t["expect_cite"] else " "))
+            results.append({"id": t["id"], "ok": ok, "why": f"known={known} {cite_}".strip()})
             continue
         hits = search(t["query"], k=t.get("k", 5), mode=t.get("mode", "hybrid"))
         paths = [h["path"] for h in hits]
