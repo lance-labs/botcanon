@@ -121,15 +121,18 @@ def successors(vault: Path = None) -> dict[str, str]:
     return out
 
 
-_STATUS: dict[str, str | None] = {}
+_STATUS: dict[str, tuple[float, str | None]] = {}
 
 
 def status_of(path: str) -> str | None:
-    """Explicit `- Status:` of a note (proposed | approved | superseded), or None."""
-    if path not in _STATUS:
-        fp = VAULT / path
-        _STATUS[path] = read_status(fp.read_text()) if fp.is_file() else None
-    return _STATUS[path]
+    """Explicit `- Status:` of a note (proposed | approved | superseded), or None.
+    Cached per file mtime, so a long-running MCP server sees a status edit on the next query."""
+    fp = VAULT / path
+    mt = fp.stat().st_mtime if fp.is_file() else -1.0
+    hit = _STATUS.get(path)
+    if hit is None or hit[0] != mt:
+        _STATUS[path] = (mt, read_status(fp.read_text()) if mt >= 0 else None)
+    return _STATUS[path][1]
 
 
 def path_weight(path: str, sup: set[str]) -> float:
