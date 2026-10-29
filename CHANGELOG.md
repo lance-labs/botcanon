@@ -6,6 +6,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 
 ## [Unreleased]
 ### Fixed
+- Supply chain (BC-15, partial): `requirements.txt` pins compatible ranges (fastembed 0.8.x, numpy <3, PyYAML 6.x); CI checks the gitleaks tarball's SHA-256 before installing it. Model files are still fetched by fastembed without a recorded hash.
 - Claims match the repo (BC-14): WHY.md no longer says "one Python file" and notes the first-run model download; the old CHANGELOG CI path is annotated; `bench.py --root <your store>` no longer rewrites the repo README table (it only ever shows the test fixture).
 - Two proposals filed in the same second with the same opening words no longer overwrite each other (BC-13); the second gets a `-2` suffix. Tested in `test_cite.py`.
 - An old inbox item no longer blocks every save (BC-12): it makes freshness YELLOW (a reminder), not RED, and its age comes from the proposal's `date:` line, which survives a clone, instead of file mtime.
