@@ -94,5 +94,12 @@ with tempfile.TemporaryDirectory() as td:
     after = brain.path_weight(n, set())
     check("status edit seen in the same process", before == 1.0 and after == 0.1, f"{before} -> {after}")
 
+# BC-13: same-second, same-text proposals both survive.
+with tempfile.TemporaryDirectory() as td:
+    import brain  # noqa: E402
+    a = brain.propose("Flour price rises in May", "t", "test", Path(td))
+    b = brain.propose("Flour price rises in May", "t", "test", Path(td))
+    check("same-second proposals both kept", a != b and a.exists() and b.exists())
+
 print("test_cite:", "PASS" if not FAILS else f"FAIL {FAILS}")
 sys.exit(1 if FAILS else 0)

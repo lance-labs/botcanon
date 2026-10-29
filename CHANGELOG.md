@@ -6,6 +6,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 
 ## [Unreleased]
 ### Fixed
+- Two proposals filed in the same second with the same opening words no longer overwrite each other (BC-13); the second gets a `-2` suffix. Tested in `test_cite.py`.
 - An old inbox item no longer blocks every save (BC-12): it makes freshness YELLOW (a reminder), not RED, and its age comes from the proposal's `date:` line, which survives a clone, instead of file mtime.
 - Owner "I don't know" probes are skipped only when a topic word appears as a whole word in the notes (BC-11); "carpet" no longer removes the pet probe. Tested in `test_evals.py`.
 - `compile` picks the current decision by its `- Date:` among notes that are not superseded (by `Prior:` or `Status:`), not by filename order (BC-09). A bad line in `log/*.jsonl` is skipped instead of crashing `compile`/`why`, and verify fails with its file:line. Tested in `test_cite.py`.
