@@ -130,7 +130,7 @@ with tempfile.TemporaryDirectory() as td:
     b = brain.propose("Flour price rises in May", "t", "test", Path(td))
     check("same-second proposals both kept", a != b and a.exists() and b.exists())
 
-# Prior: lines may be prose naming several decisions in backticks (Lance-vault style)
+# Prior: lines may be prose naming several decisions in backticks (real-vault style)
 sys.path.insert(0, str(ROOT / "tools"))
 import brain  # noqa: E402
 got = brain.prior_paths("- Prior: twice-daily window in `decisions/b.md` (and earlier in `decisions/a.md`).\n- Prior: decisions/c.md\n")
@@ -139,9 +139,9 @@ check("prose Prior: lines name every decision", got == ["decisions/b.md", "decis
 # "On what date" needs a day in the fact itself: a month range or the provenance Date: does not count
 import cite  # noqa: E402
 brain.set_root(str(ROOT / "tests" / "fixtures" / "vault"), None, None)
-c = {"quote": "- Was a PwC Manager, Jan 2011-Jun 2015. Date: 2026-10-29. From: Jira.", "path": "decisions/2026-02-15-supplier.md", "line": 3}
-check("what-date refuses month range + provenance date", cite.check_line("On what date did Lance start at PwC?", c) is not None)
-c2 = {"quote": "- Started at PwC on Jan 10, 2011.", "path": "decisions/2026-02-15-supplier.md", "line": 3}
+c = {"quote": "- Was a Acme Corp Manager, Jan 2011-Jun 2015. Date: 2026-10-29. From: Jira.", "path": "decisions/2026-02-15-supplier.md", "line": 3}
+check("what-date refuses month range + provenance date", cite.check_line("On what date did Alex start at Acme Corp?", c) is not None)
+c2 = {"quote": "- Started at Acme Corp on Jan 10, 2011.", "path": "decisions/2026-02-15-supplier.md", "line": 3}
 check("what-date accepts a day-level date", cite.DAY_RE.search(c2["quote"]) is not None)
 
 # Context block: a cited line comes with its heading chain and the whole enclosing block, never alone
