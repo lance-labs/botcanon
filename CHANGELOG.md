@@ -5,6 +5,8 @@ BotCanon (repo slug `botcanon`; formerly second-brain-starter).
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follow [SemVer](https://semver.org/); retrieval-quality changes are noted with their bench numbers.
 
 ## [Unreleased]
+### Docs
+- CI descriptions list every step (test builder, incremental re-index, empty vault) and the real triggers; Known limits states verify's cost (~0.5 s per test).
 ### Changed
 - `status` (and `flush`) write `status.json` into the store's `.index/`, not the engine's `tools/` folder, so `--root` never writes one store's stats into another checkout.
 ### Added
