@@ -37,4 +37,4 @@ Every promoted fact should come with a golden question that would fail if the fa
 
 ## Small on purpose
 
-One Python file, SQLite, and a local embedding model. There is no server to keep running, no API key, and no graph database to fix. When the vault outgrows that, the files are still just files, and you can move them to something bigger. Don't add the bigger thing until a failing test asks for it.
+A few local Python modules (`tools/brain.py` and helpers), SQLite, and two small local models downloaded once on first run. There is no server to keep running, no API key, and no graph database to fix. When the vault outgrows that, the files are still just files, and you can move them to something bigger. Don't add the bigger thing until a failing test asks for it.
