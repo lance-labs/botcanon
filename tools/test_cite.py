@@ -136,5 +136,13 @@ import brain  # noqa: E402
 got = brain.prior_paths("- Prior: twice-daily window in `decisions/b.md` (and earlier in `decisions/a.md`).\n- Prior: decisions/c.md\n")
 check("prose Prior: lines name every decision", got == ["decisions/b.md", "decisions/a.md", "decisions/c.md"], str(got))
 
+# "On what date" needs a day in the fact itself: a month range or the provenance Date: does not count
+import cite  # noqa: E402
+brain.set_root(str(ROOT / "tests" / "fixtures" / "vault"), None, None)
+c = {"quote": "- Was a PwC Manager, Jan 2011-Jun 2015. Date: 2026-10-29. From: Jira.", "path": "decisions/2026-02-15-supplier.md", "line": 3}
+check("what-date refuses month range + provenance date", cite.check_line("On what date did Lance start at PwC?", c) is not None)
+c2 = {"quote": "- Started at PwC on Jan 10, 2011.", "path": "decisions/2026-02-15-supplier.md", "line": 3}
+check("what-date accepts a day-level date", cite.DAY_RE.search(c2["quote"]) is not None)
+
 print("test_cite:", "PASS" if not FAILS else f"FAIL {FAILS}")
 sys.exit(1 if FAILS else 0)

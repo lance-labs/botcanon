@@ -252,6 +252,11 @@ CHECK_CE = os.environ.get("BRAIN_CHECK_CE")  # optional MiniLM floor on (questio
 # on keyword queries ("food cost target") the cross-encoder scores a right line below a wrong one.
 
 
+# Provenance tail ("Date: ... From: ... Source: ...") records when a fact was written, not the fact.
+PROV_RE = re.compile(r"\b(?:Date|From|Source|Supersedes)\s*:")
+DAY_RE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b|\b(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?\s+\d{1,2}(st|nd|rd|th)?\b(?!\d)|\b\d{1,2}/\d{1,2}(/\d{2,4})?\b", re.I)
+
+
 def check_line(q: str, c: dict) -> str | None:
     """Why the cited line does not answer q (None = it does). Rules, then the local cross-encoder; an optional
     external check (BRAIN_CHECK_CMD) runs last. Every rule is about the kind of answer, not about a vault."""
@@ -269,6 +274,9 @@ def check_line(q: str, c: dict) -> str | None:
     # An asked-for Revisit:/Date: line is the answer even when it says "standing (no review date)".
     if re.match(r"^\s*(when|what (time|date|day|year|month))\b", ql) and not META_RE.match(line) and not TIME_RE.search(line):
         return "asks when; the line states no date or time"
+    # "On what date" wants a day, not a month or year range ("Jan 2011-Jun 2015").
+    if re.search(r"\b(on )?(what|which|exact) date\b", ql) and not META_RE.match(line) and not DAY_RE.search(PROV_RE.split(line)[0]):
+        return "asks for a date; the line states no day-level date"
     # A named date must be the cited note's own date (path or Date line) or be in the line itself;
     # other identifiers (R-13882, 2026) must appear somewhere in the note.
     date_line = next((l for l in note.splitlines() if re.match(r"^[-*]?\s*Date\s*:", l)), "")
