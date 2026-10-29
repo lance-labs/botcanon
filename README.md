@@ -30,7 +30,28 @@ Your vault starts empty: a skeleton of folders and a `GOALS.md` stub. Nothing to
 | Outdated facts | Old and new statements sit side by side | Replaced facts are marked and ranked down |
 | Proof | "I remember" | `file:line "quote"`, checked against the file |
 
-**On usage savings: expected, not measured.** We have not measured token or usage savings on real bots. What we can measure: a lookup on the small test fixture returns about 430 to 550 characters, roughly 110 to 140 tokens (assuming about 4 characters per token). To estimate your own saving, count the characters in a chat history your bot would otherwise reread, divide by 4, and compare with that lookup size. Savings depend on your bots looking things up here instead of relying on long chats. The agent rules below make that the default; the chat app still decides how much history it loads.
+**Usage and speed:** see [What to expect](#what-to-expect) for what we measured on one real vault.
+
+## What to expect
+
+These numbers come from one test on the author's own vault and five bots' chat histories (2026-10-29), not from a benchmark. Your results will vary with how many notes you keep, how well your test questions are worded, and how long your chat history is.
+
+The test used 88 questions. 46 had an answer somewhere, and 42 had no answer anywhere and should get "I don't know".
+
+| | Chat history only | BotCanon only | BotCanon, then chat history on "I don't know" |
+|---|---|---|---|
+| Right (of 46) | 26, plus 2 partly right | 28 | 38, plus 1 partly right |
+| Wrong (of 46) | 0 | 1 (quoted a real line that did not answer the question) | 1 |
+| Made up an answer when there was none (of 42) | 0 | 0 | 0 |
+| Text the bot reads per question (median) | about 117,000 tokens | about 40 to 100 tokens | about 117,000 (chat was searched on 59 of 88 questions) |
+| Time per question (median) | 50.9 s per call to the chat model (11 questions per call) | 1.3 s with search loaded; about 5 s from a cold command line | 36 s |
+
+What this means:
+- **Chat history did not make things up either.** A strong model rereading chat said "I don't know" when it wasn't sure. BotCanon's gain is not that it is more correct when it answers. It answers from a small, cited lookup instead of rereading the whole history, so it costs far less per question and is much faster.
+- **Each one knows things the other doesn't.** BotCanon missed facts that were only ever said in chat, and chat missed facts that had scrolled out of the history it could hold. Used together (BotCanon first, chat history only on "I don't know"), the test got 38 of 46 right with nothing made up. Label answers from chat as "from chat" and send them to `inbox/` as proposals, not facts.
+- **A bigger chat history costs more to reread.** The lookup stays about the same size however long your chats get.
+
+How it was measured: BotCanon engine `3d744c3` with its built-in answer check and no extra model. Chat-only answers came from one run of a single strong model over about 117,000 tokens of trimmed history from five bots, and were graded by a model with a fixed rubric plus hand checks. The fallback column reuses those chat answers. There was one run with no repeats. The questions were written from the vault, which favors BotCanon, while one chat history holding all five bots favors chat. Times were measured on one Linux machine.
 
 ## What you get
 
@@ -107,6 +128,8 @@ verify: RED
 
 - **Rewrite the question** so it asks for what that line says, in your own words. Changing `ari-novak-7` to `what day does Ari deliver flour` and `dana-okafor-7` to `when does Dana reconcile the accounts` turned both to PASS (`passed: 10  failed: 5`).
 - **Rewrite the source line** if the note itself is unclear, for example a fact buried in a long sentence, then copy the new wording into `expect_quote`. Adding or removing other lines doesn't matter; tests match the line's text, not its number.
+
+If you use the Curator bot ([docs/CURATOR-AGENT.md](docs/CURATOR-AGENT.md)), it drafts these rewrites for you and applies them once you approve.
 - **Changed a fact?** When you edit an answer line (a new price, a new day), its test fails until you update `expect_quote`. That is on purpose: it makes you confirm the new fact is the one your bots should give.
 - **Delete the test** if the line isn't a fact worth remembering.
 - **Start over** for a note you changed a lot: delete its tests, run `evals init` again, review, and `evals accept`.
