@@ -32,3 +32,8 @@ goldens:
   - {id: idk-bakery-owner, query: "who owns the bakery", expect_known: false}
   - {id: cite-flour-order-time, query: "when do flour orders need to be placed", expect_known: true, allow_idk: true, expect_cite: "people/ari-novak.md:8"}
   - {id: cite-bakery-sells, query: "what does the bakery sell", expect_known: true, allow_idk: true, expect_cite: "decisions/2026-02-01-pricing.md:8"}
+  # Answer check (2026-10-29): the line must state an answer of the asked kind, or "I don't know"
+  - {id: idk-check-email, query: "what is Ari Novak's email address", expect_known: false}
+  - {id: idk-check-phone, query: "what is Dana Okafor's phone number", expect_known: false}
+  - {id: idk-check-date, query: "what did the 2026-01-20 pricing decision set", expect_known: false}
+  - {id: cite-check-revisit, query: "when should the single flour supplier decision be revisited", expect_known: true, expect_cite: "decisions/2026-02-15-supplier.md:9"}
