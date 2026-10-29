@@ -25,10 +25,18 @@ OWNER = {w.lower() for w in os.environ.get("BRAIN_OWNER", "").split() if w}
 _VEC: dict = {}
 
 
+MONTHS = {m: m[:3] for m in ("january", "february", "march", "april", "june", "july", "august", "september",
+                              "october", "november", "december")} | {"sept": "sep"}
+
+
 def _norm(w: str) -> str:
     w = re.sub(r"'s$", "", w.lower().replace("\u2019", "'")).strip("'")
+    if w in MONTHS:
+        return MONTHS[w]  # "September" in a question matches "Sep-10" in a note
     if len(w) >= 6 and w.endswith(("ies", "ier")):
         return w[:-2]  # supplies / supplier -> suppli
+    if len(w) >= 7 and w.endswith(("ings", "ers")):
+        w = w[:-1]  # "briefings" and "briefing" both end at "brief"
     for suf in ("ing", "ed", "es", "s"):
         if len(w) - len(suf) >= 3 and w.endswith(suf):
             return w[: -len(suf)]
@@ -70,9 +78,28 @@ def _vecs(ws: list[str]):
 
 
 META_RE = re.compile(r"^[-*]?\s*(Status|Date|Owner|From|Source|Prior|Revisit|Supersedes|Updated)\s*:", re.I)
+# Rationale lines explain a fact; they state it only for a why/how question.
+RATIONALE_RE = re.compile(r"^[-*]?\s*(Why|How|Related|Proof|Bar fit)\s*:", re.I)
+# A metadata line is the answer when the question asks for that field.
+META_ASKED = {"status": r"\bstatus\b", "revisit": r"\b(revisit\w*|review\w* again|check\w* again|re-?check\w*|reconsider\w*)\b",
+              "owner": r"\b(owner|owns)\b", "source": r"\bsource\b"}
 
 
-def coverage(terms: list[str] | dict[str, float], line: str, title: str = "") -> float:
+def skip_line(q: str, s: str) -> bool:
+    """Headings, metadata (unless asked for) and rationale (unless a why/how question) are never the answer."""
+    if len(s) < 8 or s.startswith(("#", "---")) or re.match(r"^status:", s):
+        return True
+    m = META_RE.match(s)
+    if m:
+        pat = META_ASKED.get(m.group(1).lower())
+        return not (pat and re.search(pat, q, re.I))
+    r = RATIONALE_RE.match(s)
+    if r:
+        return not re.match(rf"^\s*{'why' if r.group(1).lower() == 'why' else '(why|how)'}\b", q, re.I)
+    return False
+
+
+def coverage(terms: list[str] | dict[str, float], line: str, title: str = "", taken: set[str] | None = None) -> float:
     """Share of question terms the line states (exactly or by close embedding).
     The note title counts as context for the line, so "opening hours" can match the
     Decision line under "# Decision: Opening hours". No terms = nothing to verify = 0."""
@@ -85,7 +112,9 @@ def coverage(terms: list[str] | dict[str, float], line: str, title: str = "") ->
     m = _vecs(lw)
     # A line word that already matches a question word exactly can't also stand in for another one
     # ("Prefers phone." must not cover both "phone" and "number").
-    free = [i for i, x in enumerate(lw) if x not in w]
+    # `taken`: the other question words, when checking one word at a time ("offer" must not be stood in for by
+    # "accepted", which already states the question's "accept").
+    free = [i for i, x in enumerate(lw) if x not in w and x not in (taken or ())]
     hit = lambda t: t in lw or bool(free) and float((m[free] @ _vecs([t])[0]).max()) >= SPAN_SYN_COS
     return sum(wt for t, wt in w.items() if hit(t)) / sum(w.values())
 
@@ -102,8 +131,8 @@ def candidates(q: str, paths: list[str], n: int = 3) -> list[dict]:
         title = next((l.lstrip("# ").split(":", 1)[-1] for l in lines if l.startswith("# ")), "")
         for i, ln in enumerate(lines, 1):
             s = ln.strip()
-            if len(s) < 8 or s.startswith(("#", "---")) or META_RE.match(s) or re.match(r"^status:", s):
-                continue  # headings and metadata (Date:, Owner:, ...) are never the answer
+            if skip_line(q, s):
+                continue
             out.append({"path": p, "line": i, "quote": s, "coverage": round(coverage(terms, s, title), 3),
                         "own": coverage(terms, s)})
     # Ties (the note title fills in for every line) go to the line that states more on its own,
@@ -162,7 +191,7 @@ def rescue(q: str, skip: set[str]) -> dict | None:
         title = next((l.lstrip("# ").split(":", 1)[-1] for l in lines if l.startswith("# ")), "")
         for i, ln in enumerate(lines, 1):
             s = ln.strip()
-            if len(s) < 8 or s.startswith(("#", "---")) or META_RE.match(s) or re.match(r"^status:", s):
+            if skip_line(q, s):
                 continue
             lw = _words(s)
             n = sum(t in lw for t in terms)
@@ -190,16 +219,80 @@ def unseen_terms(q: str) -> list[str]:
     return [t for t in term_weights(q) if not any(t in d for d in docs)]
 
 
+YESNO_RE = re.compile(r"^\s*(did|does|do|is|are|was|were|has|have|had|can|could|should|will|would)\b", re.I)
+
+
 def states_unseen(q: str, c: dict) -> bool:
     """A word the vault never uses must be stated (exactly or by close synonym) by the cited line, unless the
     line itself repeats a question word verbatim. Otherwise the line answers a nearby question:
-    "Prefers phone." (phone ~ number, nothing verbatim) is not Dana's passport number."""
+    "Prefers phone." (phone ~ number, nothing verbatim) is not Dana's passport number.
+    A line word that already states another question word can't be the synonym ("accepted" for "offer").
+    Yes/no questions get no verbatim fallback: the answer depends on every word of the claim."""
     lines = (brain.VAULT / c["path"]).read_text(encoding="utf-8").splitlines()
     title = next((l.lstrip("# ").split(":", 1)[-1] for l in lines if l.startswith("# ")), "")
-    if all(coverage({t: 1.0}, c["quote"], title) > 0 for t in unseen_terms(q)):
+    qw = set(term_weights(q))
+    if all(coverage({t: 1.0}, c["quote"], title, taken=qw - {t}) > 0 for t in unseen_terms(q)):
         return True
+    if YESNO_RE.match(q):
+        return False
     # A paraphrase ("coaches", "held") may be unseen too; it is fine when the line itself states a question word verbatim.
-    return bool(set(term_weights(q)) & _words(c["quote"]))
+    return bool(qw & _words(c["quote"]))
+
+
+# ---------------------------------------------------------------- answer check (local, no LLM)
+# The line must state an answer of the asked kind, not just share the question's words.
+EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+")
+PHONE_RE = re.compile(r"(\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}")
+NAME2_RE = re.compile(r"\b[A-Z][a-z]+\s+[A-Z][a-z]+\b")
+TIME_RE = re.compile(r"\b(\d{4}-\d{2}(-\d{2})?|\d{1,2}:\d{2}|\d{1,2}\s*(am|pm)|(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?[\s-]*\d{1,2}|"
+                     r"(19|20)\d{2}|monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|wed|thu|fri|sat|sun|daily|weekly|"
+                     r"monthly|tonight|today|tomorrow|morning|evening|noon|midnight|after|before|every|each|whenever|once|until|upon|\d+\s*(day|week|month|year)s?)\b", re.I)
+IDENT_RE = re.compile(r"\b(\d{4}-\d{2}-\d{2}|[A-Z]{1,4}-\d{3,}|\d{4,})\b")
+CHECK_CE = os.environ.get("BRAIN_CHECK_CE")  # optional MiniLM floor on (question, "title. line"); off by default:
+# on keyword queries ("food cost target") the cross-encoder scores a right line below a wrong one.
+
+
+def check_line(q: str, c: dict) -> str | None:
+    """Why the cited line does not answer q (None = it does). Rules, then the local cross-encoder; an optional
+    external check (BRAIN_CHECK_CMD) runs last. Every rule is about the kind of answer, not about a vault."""
+    ql, line = q.lower(), c["quote"]
+    note = (brain.VAULT / c["path"]).read_text(encoding="utf-8")
+    title = next((l.lstrip("# ").split(":", 1)[-1] for l in note.splitlines() if l.startswith("# ")), "")
+    if re.search(r"\be-?mail\b", ql) and not EMAIL_RE.search(line):
+        return "asks for an email address; the line has none"
+    if re.search(r"\b(phone|cell|mobile|telephone)\b", ql) and not PHONE_RE.search(line):
+        return "asks for a phone number; the line has none"
+    if re.search(r"\b(last name|surname|family name|full name)\b", ql) and not NAME2_RE.search(line):
+        return "asks for a full or last name; the line has none"
+    if re.search(r"\bstands? for\b", ql) and not re.search(r"\bstands? for\b|\bshort for\b|abbreviat", line, re.I):
+        return "asks what something stands for; the line does not expand it"
+    # An asked-for Revisit:/Date: line is the answer even when it says "standing (no review date)".
+    if re.match(r"^\s*(when|what (time|date|day|year|month))\b", ql) and not META_RE.match(line) and not TIME_RE.search(line):
+        return "asks when; the line states no date or time"
+    # A named date must be the cited note's own date (path or Date line) or be in the line itself;
+    # other identifiers (R-13882, 2026) must appear somewhere in the note.
+    date_line = next((l for l in note.splitlines() if re.match(r"^[-*]?\s*Date\s*:", l)), "")
+    for ident in IDENT_RE.findall(q):
+        hay = line + " " + c["path"] + " " + date_line if re.match(r"\d{4}-\d{2}-\d{2}$", ident) else note + " " + c["path"]
+        if ident not in hay:
+            return f"the question names {ident}; the cited note is not about it"
+    rare = attribute_terms(q)
+    if rare and not set(rare) & _words(line + " " + title + " " + c["path"].replace("-", " ").replace("/", " ")):
+        return "none of the question's distinctive words (" + ", ".join(rare) + ") are in the line; synonyms alone don't answer"
+    if CHECK_CE is not None and _ce(q, [f"{title}. {line}"])[0] < float(CHECK_CE):
+        return "the cross-encoder does not rate the line as an answer"
+    cmd = os.environ.get("BRAIN_CHECK_CMD")
+    if cmd:  # optional, off by default: an LLM judge reading the prompt on stdin, answering YES or NO
+        import subprocess
+        prompt = (f"Question: {q}\nLine from the note \"{title}\": {line}\n"
+                  "Does this line itself state the answer to the question? Reply YES or NO only.")
+        try:
+            out = subprocess.run(cmd, shell=True, input=prompt, capture_output=True, text=True, timeout=120).stdout
+        except Exception:
+            return "external check failed (fail closed)"
+        if not re.search(r"\byes\b", out, re.I):
+            return "external check: the line does not state the answer"
+    return None
 
 
 def source_status(paths: list[str]) -> dict[str, str]:
@@ -226,18 +319,31 @@ def cited_answer(q: str) -> dict:
     if missing and not (cands and states_unseen(q, cands[0])):
         return {"known": False, "answer": f"I don't know: the vault never mentions {', '.join(missing)}.",
                 "sources": base["sources"], "source_status": st, "candidates": cands}
-    if cands and cands[0]["coverage"] < SPAN_COVER and top_note_ok(q, cands[0], current[0]):
+    if cands and cands[0]["coverage"] < SPAN_COVER and top_note_ok(q, cands[0], current[0]) and not check_line(q, cands[0]):
         c = cands[0]
         return {"known": True, "answer": c["quote"], "sources": base["sources"], "source_status": st, "candidates": cands,
                 "citation": f'{c["path"]}:{c["line"]} "{c["quote"]}"'}
     if not cands or cands[0]["coverage"] < SPAN_COVER:
         r = rescue(q, set(base["sources"][:3]))
-        if r:
+        if r and not check_line(q, r):
             return {"known": True, "answer": r["quote"], "sources": list(dict.fromkeys([r["path"]] + base["sources"]))[:5],
                     "source_status": st, "candidates": [r] + cands[:2], "rescued": True,
                     "citation": f'{r["path"]}:{r["line"]} "{r["quote"]}"'}
         return {"known": False, "answer": "I don't know: no line in the cited notes states it.",
                 "sources": base["sources"], "source_status": st, "candidates": cands}
-    c = cands[0]
-    return {"known": True, "answer": c["quote"], "sources": base["sources"], "source_status": st, "candidates": cands,
-            "citation": f'{c["path"]}:{c["line"]} "{c["quote"]}"'}
+    # Answer check: the first stating line that also passes check_line; otherwise I don't know.
+    why_not = []
+    for c in (c for c in cands if c["coverage"] >= SPAN_COVER):
+        reason = check_line(q, c)
+        if reason is None:
+            return {"known": True, "answer": c["quote"], "sources": base["sources"], "source_status": st, "candidates": cands,
+                    "citation": f'{c["path"]}:{c["line"]} "{c["quote"]}"'}
+        why_not.append(f'{c["path"]}:{c["line"]}: {reason}')
+    if why_not:  # the top notes' stating lines don't answer: look through the other notes, same check
+        r = rescue(q, set(base["sources"][:3]))
+        if r and not check_line(q, r):
+            return {"known": True, "answer": r["quote"], "sources": list(dict.fromkeys([r["path"]] + base["sources"]))[:5],
+                    "source_status": st, "candidates": [r] + cands[:2], "rescued": True,
+                    "citation": f'{r["path"]}:{r["line"]} "{r["quote"]}"'}
+    return {"known": False, "answer": "I don't know: " + (why_not[0].split(": ", 1)[1] if why_not else "no line states it") + ".",
+            "sources": base["sources"], "source_status": st, "candidates": cands, "check": why_not}
