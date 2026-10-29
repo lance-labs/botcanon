@@ -639,6 +639,12 @@ def verify(as_json: bool = False) -> bool:
             hit5 += bool(rank and rank <= 5)
             ok = bool(rank and rank <= t.get("max_rank", 5))
             why = f"rank={rank}"
+            if ok and t.get("expect_cite"):  # answer-level: the cited answer must quote the source line
+                from cite import cited_answer
+                r = cited_answer(t["query"])
+                cite_ = r.get("citation", "") if r["known"] else ""
+                ok = cite_.startswith(t["expect_cite"] + (":" if ":" not in t["expect_cite"] else " "))
+                why = f"rank={rank} cite={'expected ' + t['expect_cite'] + ', got ' + (cite_ or 'no answer') if not ok else 'ok'}"
         rej = t.get("reject_path")
         rej = tuple(rej) if isinstance(rej, list) else rej
         if rej and any(p.startswith(rej) for p in paths):

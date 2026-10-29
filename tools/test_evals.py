@@ -136,6 +136,19 @@ def main() -> int:
         r = b("verify")
         if "passed: " not in r.stdout or "evals: none" in r.stdout:
             errs.append(f"verify should run the accepted tests: {r.stdout[-300:]}")
+        acc = yaml.safe_load(tests.read_text())["goldens"]
+        if any(t.get("expect_cite") != t.get("source") for t in acc if "expect_path" in t):
+            errs.append("every answerable init test must carry expect_cite = its source line")
+        # BC-05: a wrong expected line must FAIL even when retrieval ranks the note first
+        bad = dict(next(t for t in acc if "expect_path" in t and re.search(rf"^{re.escape(t['id'])}: PASS", r.stdout, re.M)))
+        bad["id"] = "wrong-cite"
+        bad["expect_cite"] = bad["expect_path"] + ":9999"
+        keep = tests.read_text()
+        tests.write_text(yaml.safe_dump({"recall_at_5_floor": 0.0, "goldens": [bad]}))
+        rb = b("verify")
+        if not re.search(r"^wrong-cite: FAIL .*cite=expected", rb.stdout, re.M) or rb.returncode == 0:
+            errs.append(f"a test whose answer doesn't quote expect_cite must fail: {rb.stdout[-300:]}")
+        tests.write_text(keep)
         print(r.stdout.strip().splitlines()[-4] if r.stdout.strip() else "", file=sys.stderr)
 
         # fix 4: an empty or unknown-key tests file is RED and nonzero; legacy `cases:` is read
