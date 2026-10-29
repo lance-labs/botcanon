@@ -48,6 +48,22 @@ with tempfile.TemporaryDirectory() as td:
     for ask in ("what is the capital of Peru", "what is the employee dental plan"):
         known, q = answer(v, ask)
         check(f"I don't know: {ask}", not known, q)
+    # BC-01 gap: a question with no rare terms must not be answered by a line sharing only one common word
+    known, q = answer(v, "when does the bakery open")
+    check("'when does the bakery open' never quotes a bakery-only line",
+          not known or "2026-03-01-opening-hours.md:" in q, q)
+    # A fact added above the answer must not win just by coming first in the note (title fills in for both)
+    pricing = v / "decisions" / "2026-02-01-pricing.md"
+    orig = pricing.read_text()
+    lines = orig.splitlines(keepends=True)
+    at = next(i for i, l in enumerate(lines) if "Price sourdough" in l)
+    pricing.write_text("".join(lines[:at] + ["- Added later: the shop cat is called Biscuit.\n"] + lines[at:]))
+    run(v, "ingest")
+    known, q = answer(v, "Bread pricing")
+    check("inserted fact above the answer: 'Bread pricing' still quotes the price line",
+          known and f"2026-02-01-pricing.md:{at + 2}" in q and "Price sourdough" in q, q)
+    pricing.write_text(orig)
+    run(v, "ingest")
 
     # Tiny vault: every word is "common" (1 of 3 notes > 25%). Must not cite a Date line.
     t = Path(td) / "tiny"

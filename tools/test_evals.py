@@ -158,7 +158,7 @@ def main() -> int:
         orig = note.read_text()
         lines = orig.splitlines(keepends=True)
         n = int(good_t["source"].rsplit(":", 1)[1])
-        note.write_text("".join(lines[:n - 1] + ["\n"] + lines[n - 1:]))
+        note.write_text("".join(lines[:n - 1] + ["- Added later: the shop cat is called Biscuit.\n"] + lines[n - 1:]))
         rb = one(good_t)
         if not re.search(rf"^{re.escape(good_t['id'])}: PASS", rb.stdout, re.M):
             errs.append(f"expect_quote must survive a line inserted above the answer: {[l for l in rb.stdout.splitlines() if good_t['id'] in l]}")
