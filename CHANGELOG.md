@@ -5,6 +5,8 @@ BotCanon (repo slug `botcanon`; formerly second-brain-starter).
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follow [SemVer](https://semver.org/); retrieval-quality changes are noted with their bench numbers.
 
 ## [Unreleased]
+### Added
+- `expect_path` accepts a list; the test passes when any listed note is within `max_rank` (older test files use this).
 ### Fixed (test builder, from a run on a real vault: 31 of 81 proposals were usable)
 - `evals accept` refuses tests not marked `reviewed: true` (or `--all-reviewed`) and any `REWRITE:` placeholder query; exits 1 when it refuses.
 - `evals init` no longer builds "Title: word word word" queries from the answer line. Field lines get a template question (Why, Last contact, Role, ...); other lines get a `REWRITE:` placeholder. Titles lose dates and parentheticals; commentary fields and lines near-identical to a line in another note are skipped.

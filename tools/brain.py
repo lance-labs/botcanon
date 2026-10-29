@@ -576,9 +576,10 @@ def verify(as_json: bool = False) -> bool:
         paths = [h["path"] for h in hits]
         if t.get("expect_empty"):
             ok, why = not hits, f"got {paths[:3]}"
-        if "expect_path" in t:
+        if "expect_path" in t:  # one note, or a list where any one counts
             n5 += 1
-            rank = paths.index(t["expect_path"]) + 1 if t["expect_path"] in paths else None
+            want = t["expect_path"] if isinstance(t["expect_path"], list) else [t["expect_path"]]
+            rank = min((paths.index(w) + 1 for w in want if w in paths), default=None)
             hit5 += bool(rank and rank <= 5)
             ok = bool(rank and rank <= t.get("max_rank", 5))
             why = f"rank={rank}"
