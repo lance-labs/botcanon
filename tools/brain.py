@@ -582,7 +582,9 @@ def verify(as_json: bool = False) -> bool:
             hit5 += bool(rank and rank <= 5)
             ok = bool(rank and rank <= t.get("max_rank", 5))
             why = f"rank={rank}"
-        if t.get("reject_path") and any(p.startswith(t["reject_path"]) for p in paths):
+        rej = t.get("reject_path")
+        rej = tuple(rej) if isinstance(rej, list) else rej
+        if rej and any(p.startswith(rej) for p in paths):
             ok, why = False, f"rejected path present: {paths}"
         results.append({"id": t["id"], "ok": ok, "why": why})
     recall = hit5 / n5 if n5 else 1.0

@@ -55,6 +55,10 @@ KEY_QUESTIONS = {  # common field names mapped to questions people actually ask
     "last": "when was the last contact with {t}", "last contact": "when was the last contact with {t}",
     "primary": "what is the primary source for {t}", "role": "what is the role of {t}",
     "contact": "how do we contact {t}", "meeting": "when is the meeting for {t}",
+    "owner": "who owns {t}", "deadline": "what is the deadline for {t}", "due": "when is {t} due",
+    "budget": "what is the budget for {t}", "cost": "what does {t} cost", "price": "what is the price of {t}",
+    "goal": "what is the goal of {t}", "next step": "what is the next step for {t}", "location": "where is {t}",
+    "schedule": "what is the schedule for {t}", "email": "what is the email for {t}", "phone": "what is the phone number for {t}",
 }
 DERIVED = {"CURRENT.md"}  # dashboards rank below their sources by design; never a test target
 REWRITE = "REWRITE:"
@@ -71,22 +75,25 @@ def _question(title: str, line: str, key: str | None, rel: str, n: int) -> str:
     """A question that names the topic but not the answer; otherwise a REWRITE placeholder for a human."""
     t = clean_title(title)
     k = (key or "").lower()
-    if k and k != "decision" and t:
-        q = KEY_QUESTIONS.get(k, "what is the {k} for {t}").format(k=k, t=t)
+    if k in KEY_QUESTIONS and t:  # unknown field names make ungrammatical questions; a human writes those
+        q = KEY_QUESTIONS[k].format(t=t)
         if t.lower() in ("current", "goals"):
             q = f"what is our current {k}"
         return q  # template + topic only: the answer line's own words never enter the query
     return f"{REWRITE} ask, in your own words, the question that {rel} line {n} answers"
 
 
-def _boilerplate(per_note: dict[str, list[tuple]]) -> set[tuple[str, ...]]:
-    """Line openings that repeat across 3+ notes: stock sentences that test nothing note-specific."""
-    seen: dict[tuple[str, ...], set[str]] = {}
-    for rel, cands in per_note.items():
-        for _s, _n, line, key in cands:
-            body = KV_RE.match(line).group(2) if key else line
-            seen.setdefault(tuple(_words(body)[:5]), set()).add(rel)
-    return {k for k, v in seen.items() if len(v) >= 3}
+def _boilerplate(per_note: dict[str, list[tuple]]) -> set[tuple[str, int]]:
+    """(note, line) pairs whose wording is near-identical (word Jaccard >= 0.4) to a line in another note.
+    Stock sentences can't tell notes apart, so they make tests that pass or fail by luck."""
+    lines = [(rel, n, set(_words(KV_RE.match(line).group(2) if key else line)))
+             for rel, cands in per_note.items() for _s, n, line, key in cands]
+    out = set()
+    for i, (ra, na, wa) in enumerate(lines):
+        for rb, nb, wb in lines[i + 1:]:
+            if ra != rb and wa and wb and len(wa & wb) / len(wa | wb) >= 0.4:
+                out |= {(ra, na), (rb, nb)}
+    return out
 
 
 def _targets() -> list[Path]:
@@ -112,7 +119,7 @@ def evals_init(per_note: int = 2, quotes: bool = False) -> tuple[str, int]:
         text = p.read_text()
         rel = brain.rel(p)
         title = brain.note_title(text, p)
-        picked = [c for c in cands[rel] if tuple(_words(KV_RE.match(c[2]).group(2) if c[3] else c[2])[:5]) not in stock]
+        picked = [c for c in cands[rel] if (rel, c[1]) not in stock]
         for _score, n, line, key in picked[:per_note]:
             q = _question(title, line, key, rel, n)
             if q.lower() in seen:

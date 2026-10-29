@@ -80,6 +80,14 @@ def main() -> int:
             errs.append("free-text line should give a REWRITE: placeholder")
         if _question("Ari Novak (2026-01-02)", "- Last: 2026-03-01 call", "Last", "x.md", 3) != "when was the last contact with Ari Novak":
             errs.append("field template / title cleanup wrong")
+        from evals_gen import _boilerplate
+        stock = _boilerplate({"a.md": [(0, 3, "- Why: standing filter for jobs so we never re-derive it from chat", "Why")],
+                              "b.md": [(0, 4, "- Why: standing filter for leads so we never re-derive it from chat", "Why"),
+                                       (0, 5, "- Why: the oven fits the back room", "Why")]})
+        if stock != {("a.md", 3), ("b.md", 4)}:
+            errs.append(f"near-identical lines across notes should be skipped: {stock}")
+        if not _question("Pricing", "- Compiler notes: use gcc 12 always", "Compiler notes", "x.md", 3).startswith(REWRITE):
+            errs.append("an unknown field name should give a REWRITE: placeholder, not a template")
 
         # fix 5: --quotes opt-in copies the exact line
         b("evals", "init", "--quotes")
@@ -125,7 +133,9 @@ def main() -> int:
             r = b("verify")
             if r.returncode == 0 or "verify: RED" not in r.stdout or "tests_file: FAIL" not in r.stdout:
                 errs.append(f"{name} tests file must be RED and nonzero: {r.returncode} {r.stdout[-200:]}")
-        tests.write_text(yaml.safe_dump({"recall_at_5_floor": 0.9, "cases": good["goldens"]}))
+        legacy = good["goldens"] + [{"id": "legacy-reject-list", "query": "croissant price", "reject_path": ["inbox/", "log/"]}]
+        good["goldens"] = legacy
+        tests.write_text(yaml.safe_dump({"recall_at_5_floor": 0.9, "cases": legacy}))
         r = b("verify")
         m = re.search(r"passed: (\d+)\s+failed: (\d+)", r.stdout)
         if not m or int(m.group(1)) + int(m.group(2)) != len(good["goldens"]) or "tests_file" in r.stdout:
