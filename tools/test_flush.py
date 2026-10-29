@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""flush commits memory paths only.
+"""flush commits memory paths only, and pushes only when asked and the repo is not public.
 
 On a temp git copy of the TEST FIXTURE (with a local bare repo as its remote):
-- a changed note is committed; a stray file in the checkout is not, and is reported.
+- a changed note is committed; a stray file in the checkout is not, and is reported;
+- plain `flush` does not push; `flush --push` does;
+- `flush --push` refuses when GitHub reports the repo PUBLIC (a fake `gh` on PATH), unless --allow-public.
 """
-import shutil, subprocess, sys, tempfile
+import os, shutil, subprocess, sys, tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -37,12 +39,26 @@ with tempfile.TemporaryDirectory() as td:
     note = v / "people" / "ari-novak.md"
     note.write_text(note.read_text() + "- Closed on public holidays.\n")
     (v / "export-scratch.txt").write_text("not memory\n")
-    r = subprocess.run(BRAIN + ["--root", str(v), "flush", "-m", "t1", "--no-push"], capture_output=True, text=True)
+    r = subprocess.run(BRAIN + ["--root", str(v), "flush", "-m", "t1"], capture_output=True, text=True)
     files = sh(v, "git", "show", "--name-only", "--format=", "HEAD").stdout.split()
     check("flush exit 0", r.returncode == 0, r.stdout[-300:] + r.stderr[-300:])
     check("changed note committed", "people/ari-novak.md" in files, str(files))
     check("stray file not committed", "export-scratch.txt" not in files and "?? export-scratch.txt" in sh(v, "git", "status", "--porcelain").stdout)
     check("stray file reported", "non-memory" in r.stdout)
+    local, remote = sh(v, "git", "rev-parse", "HEAD").stdout, sh(bare, "git", "rev-parse", "main").stdout
+    check("no push by default", local != remote)
+
+    fake = Path(td) / "bin"; fake.mkdir()
+    (fake / "gh").write_text("#!/bin/sh\necho PUBLIC\n"); (fake / "gh").chmod(0o755)
+    env = {**os.environ, "PATH": f"{fake}:{os.environ['PATH']}"}
+    note.write_text(note.read_text() + "- Prefers email.\n")
+    r = subprocess.run(BRAIN + ["--root", str(v), "flush", "-m", "t2", "--push"], capture_output=True, text=True, env=env)
+    local, remote = sh(v, "git", "rev-parse", "HEAD").stdout, sh(bare, "git", "rev-parse", "main").stdout
+    check("public repo: push refused", r.returncode == 1 and local != remote and "PUBLIC" in r.stdout, r.stdout[-200:])
+    note.write_text(note.read_text() + "- Prefers phone.\n")
+    r = subprocess.run(BRAIN + ["--root", str(v), "flush", "-m", "t3", "--push", "--allow-public"], capture_output=True, text=True, env=env)
+    local, remote = sh(v, "git", "rev-parse", "HEAD").stdout, sh(bare, "git", "rev-parse", "main").stdout
+    check("--push --allow-public pushes", r.returncode == 0 and local == remote, r.stdout[-300:] + r.stderr[-300:])
 
 print("test_flush:", "PASS" if not FAILS else f"FAIL {FAILS}")
 sys.exit(1 if FAILS else 0)
