@@ -30,7 +30,7 @@ Your job:
    then python3 tools/brain.py evals accept.
    Never change a test's expected note just to make it pass.
 5. Move handled items to inbox/_processed/.
-6. Finish the batch with: python3 tools/brain.py flush -m "<what changed>"
+6. Finish the batch with: python3 tools/brain.py flush -m "<what changed>" --push
    It re-indexes, runs verify, and refuses to commit on RED. Work is not done until verify is GREEN.
 
 When answering questions:

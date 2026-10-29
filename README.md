@@ -81,7 +81,7 @@ Setup times are estimates. The Windows steps are untested; reports welcome.
    On a fresh copy the last lines say `evals: none yet` and `verify: YELLOW`. That is expected: there are no notes or tests yet. The first run downloads a small search model (not data), so it takes a minute.
 9. **Add your notes.** Write a few short notes in `decisions/`, `people/` and `projects/` (one fact per line; see [How it works](#how-it-works)), and replace the stub in `GOALS.md`.
 10. **Build your own tests:** `python3 tools/brain.py evals init`. It reads your current notes (skipping replaced ones and `CURRENT.md`) and writes `evals/proposed_tests.yaml`, which is never committed. Each test names the note it should find and the line (`source: path:line`). Where a fact has a clear field (Role, Why, Last contact), you get a ready question; otherwise the query says `REWRITE:` and you write the question you'd really ask, without copying the answer's words. Delete weak tests, set `reviewed: true` on each one you keep, then run `python3 tools/brain.py evals accept` (it refuses `REWRITE:` placeholders and unreviewed tests; `--all-reviewed` confirms you checked them all). Never change an expected note just to make a test pass. Add `--owner "<your name>"` to `init` to also test questions about you that the notes can't answer (the weak spot under Known limits). Add `--quotes` to `init` only if you want the answer line copied into the test file.
-11. **Save it:** `python3 tools/brain.py flush -m "my first notes"`. It re-indexes, runs your tests, and commits only if nothing is RED; verify should now say `GREEN`. GitHub Desktop shows the change, and you can see it on github.com.
+11. **Save it:** `python3 tools/brain.py flush -m "my first notes" --push`. It re-indexes, runs your tests, commits only if nothing is RED, and with `--push` sends it to GitHub (it refuses if GitHub says the repo is public). verify should now say `GREEN`, and you can see the change on github.com.
 12. **Ask it something:** `python3 tools/brain.py answer "<a question your notes answer>"`. It quotes the line, or says "I don't know".
 
 Stuck? Paste the error into any AI assistant along with this README.
@@ -157,7 +157,7 @@ python3 tools/bench.py                                                     # reg
 ./demo.sh                                                                  # a narrated tour on a throwaway copy of the test fixture, about 1 minute
 ```
 
-After you edit notes, run `python3 tools/brain.py flush -m "what changed"`. It re-ingests only changed files, runs verify, refuses to commit on RED, then commits and pushes. If nothing changed, it does nothing.
+After you edit notes, run `python3 tools/brain.py flush -m "what changed"`. It re-ingests only changed files, runs verify, refuses to commit on RED, then commits. It pushes only with `--push`, and refuses to push if GitHub says the repo is public (`--allow-public` overrides). If nothing changed, it does nothing.
 
 ## Results
 
@@ -210,7 +210,7 @@ Notes on these numbers: [docs/HOW-IT-WORKS.md](docs/HOW-IT-WORKS.md#retrieval-re
 ## Safety checks
 
 - **Secret scanning:** `tools/install-hooks.sh` installs pre-commit and pre-push hooks that run [gitleaks](https://github.com/gitleaks/gitleaks). They fail closed: without gitleaks on PATH, the commit or push is blocked with an install hint. Don't use `--no-verify`. `verify` fails if the hooks are missing, so a fresh clone without them shows RED.
-- **CI** (`.github/workflows/ci.yml`) runs on every push to `main` and on pull requests: gitleaks over full history, hook install, ingest and verify on the test fixture, ingest and verify on the empty starter vault, `test_evals.py` (test builder), `test_cite.py` (answers quote the stating line or abstain), `test_flush.py` (flush commits memory paths only), `test_incremental.py` (incremental re-index equals a full rebuild), the MCP end-to-end test, and `bench.py` followed by `git diff --exit-code README.md`, so the Results table can't drift from the code. Releases are tagged; see `CHANGELOG.md`.
+- **CI** (`.github/workflows/ci.yml`) runs on every push to `main` and on pull requests: gitleaks over full history, hook install, ingest and verify on the test fixture, ingest and verify on the empty starter vault, `test_evals.py` (test builder), `test_cite.py` (answers quote the stating line or abstain), `test_flush.py` (flush commits memory paths only, pushes only with `--push`, refuses a public repo), `test_incremental.py` (incremental re-index equals a full rebuild), the MCP end-to-end test, and `bench.py` followed by `git diff --exit-code README.md`, so the Results table can't drift from the code. Releases are tagged; see `CHANGELOG.md`.
 
 ## License
 MIT
