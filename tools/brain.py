@@ -642,6 +642,16 @@ def git(*args) -> subprocess.CompletedProcess:
     return subprocess.run(["git", "-C", str(VAULT), *args], capture_output=True, text=True)
 
 
+def flush_paths() -> list[str]:
+    """What flush may commit: canon files and folders, log/, inbox/, and the reviewed tests file."""
+    out = list(CANON_ROOT) + list(CANON_DIRS) + ["log", "inbox"]
+    try:
+        out.append(TESTS.resolve().relative_to(VAULT.resolve()).as_posix())
+    except ValueError:
+        pass  # tests file outside the vault (e.g. a hidden set): never committed here
+    return list(dict.fromkeys(out))
+
+
 def flush(message: str, push: bool = True) -> int:
     """Once per batch: ingest only what changed, verify, commit, push. No-op when nothing changed."""
     conn = connect()
@@ -659,8 +669,16 @@ def flush(message: str, push: bool = True) -> int:
         return 1
     status()
     if (VAULT / ".git").is_dir():
-        git("add", "-A")
+        # Stage only memory paths (canon, log, inbox, the reviewed tests), never `git add -A`:
+        # a stray file in the checkout (export, scratch, secrets) is not published by a bot's flush.
+        tracked = set(git("ls-files").stdout.split())
+        paths = [p for p in flush_paths() if (VAULT / p).exists() or any(t == p or t.startswith(p + "/") for t in tracked)]
+        if paths:
+            git("add", "-A", "--", *paths)
         git("reset", "-q", "--", "evals/proposed_tests.yaml")  # unreviewed proposals are never committed
+        left = [l[3:] for l in git("status", "--porcelain").stdout.splitlines() if l[:2] in ("??", " M", " D")]
+        if left:
+            print(f"flush: left {len(left)} non-memory change(s) uncommitted (commit them yourself if wanted): {left[:5]}")
         c = git("commit", "-m", message)
         if c.returncode != 0 and "nothing to commit" not in c.stdout:
             print("flush: git commit failed (set git user.name/user.email?):\n" + c.stdout + c.stderr)
