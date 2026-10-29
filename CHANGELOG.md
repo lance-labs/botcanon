@@ -5,6 +5,12 @@ BotCanon (repo slug `botcanon`; formerly second-brain-starter).
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follow [SemVer](https://semver.org/); retrieval-quality changes are noted with their bench numbers.
 
 ## [Unreleased]
+### Fixed (test builder, from a run on a real vault: 31 of 81 proposals were usable)
+- `evals accept` refuses tests not marked `reviewed: true` (or `--all-reviewed`) and any `REWRITE:` placeholder query; exits 1 when it refuses.
+- `evals init` no longer builds "Title: word word word" queries from the answer line. Field lines get a template question (Why, Last contact, Role, ...); other lines get a `REWRITE:` placeholder. Titles lose dates and parentheticals; commentary fields and lines near-identical to a line in another note are skipped.
+- `evals init` skips superseded notes and the derived `CURRENT.md`.
+- verify goes RED (exit 1) on a tests file with 0 tests or an unknown top-level key; legacy `cases:` is read as `goldens:`. `evals accept` appends to `cases:` when that is the file's key.
+- `evals/proposed_tests.yaml` is gitignored and `flush` unstages it. Tests carry `source: path:line`; copying the line (`quote:`) is opt-in with `evals init --quotes`.
 ### Changed
 - The user vault starts empty (folder skeleton + `GOALS.md` stub). The fictional sample notes moved, unchanged, to `tests/fixtures/vault/` (TEST FIXTURE: CI, bench, test_mcp, demo only). Bench numbers unchanged.
 - verify with no tests prints "no evals yet; run evals init" and returns YELLOW (exit 0).

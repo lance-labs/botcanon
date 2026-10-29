@@ -1,11 +1,18 @@
 #!/usr/bin/env python3
-"""evals init/accept on a temp copy of the TEST FIXTURE: proposals cite real lines, accept promotes, verify uses them."""
-import os, shutil, subprocess, sys, tempfile
+"""evals init/accept on a temp copy of the TEST FIXTURE.
+
+Checks: proposals point at real lines and current notes only, don't leak the answer's words, carry no copied
+text by default; accept refuses unreviewed or placeholder tests; flush never commits proposals;
+verify goes RED on an empty or unknown-key tests file and reads legacy `cases:`.
+"""
+import os, re, shutil, subprocess, sys, tempfile
 from pathlib import Path
 
 import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "tools"))
+from evals_gen import REWRITE, _words, clean_title  # noqa: E402
 
 
 def main() -> int:
@@ -19,26 +26,120 @@ def main() -> int:
         r = b("verify")
         if "evals init" not in r.stdout or r.returncode != 0:
             errs.append(f"verify without tests should say 'run evals init' and exit 0: {r.returncode} {r.stdout[-200:]}")
+
+        # fix 5: flush never commits unreviewed proposals (even without a .gitignore in the store)
+        g = lambda *a: subprocess.run(["git", "-C", str(v), *a], capture_output=True, text=True)
+        g("init", "-q"); g("config", "user.email", "t@example.com"); g("config", "user.name", "t")
+        for h in ("pre-commit", "pre-push"):
+            shutil.copy(ROOT / "tools/hooks" / h, v / ".git/hooks" / h)
         b("evals", "init")
         prop = v / "evals" / "proposed_tests.yaml"
+        r = b("flush", "-m", "t", "--no-push")
+        tracked = g("ls-files").stdout.split()
+        if r.returncode or not tracked or "evals/proposed_tests.yaml" in tracked:
+            errs.append(f"flush must commit notes but not evals/proposed_tests.yaml: rc={r.returncode} {r.stdout[-200:]}")
+        ign = subprocess.run(["git", "-C", str(ROOT), "check-ignore", "-q", "evals/proposed_tests.yaml"])
+        if ign.returncode:
+            errs.append("evals/proposed_tests.yaml is not gitignored")
+
         gs = (yaml.safe_load(prop.read_text()) or {}).get("goldens", []) if prop.exists() else []
-        answerable = [g for g in gs if "expect_path" in g]
-        idk = [g for g in gs if g.get("expect_known") is False]
+        answerable = [t for t in gs if "expect_path" in t]
+        idk = [t for t in gs if t.get("expect_known") is False]
         if len(answerable) < 10 or len(idk) < 3:
             errs.append(f"too few proposals: {len(answerable)} answerable, {len(idk)} idk")
-        for g in answerable:  # every quote must be the exact line at that path:line
-            path, rest = g["quote"].split(":", 1)
-            n, line = rest.split(" ", 1)
-            if path != g["expect_path"] or (v / path).read_text().splitlines()[int(n) - 1].strip() != line:
-                errs.append(f"bad quote {g['id']}: {g['quote']}")
-        b("evals", "accept")
+        sys.path.insert(0, str(ROOT / "tools"))
+        import brain
+        brain.set_root(str(v), None, None)
+        sup = brain.superseded()
+        if not sup:
+            errs.append("fixture should contain a superseded decision")
+        for t in gs:
+            if t.get("reviewed") is not False:
+                errs.append(f"{t['id']}: proposals must start reviewed: false")
+        for t in answerable:
+            path, n = t["source"].rsplit(":", 1)
+            text = (v / path).read_text()
+            line = text.splitlines()[int(n) - 1].strip()
+            # fix 3: never a superseded note or the derived CURRENT.md
+            if path in sup or path.endswith("CURRENT.md") or brain.read_status(text) == "superseded":
+                errs.append(f"{t['id']}: targets superseded/derived note {path}")
+            if path != t["expect_path"] or not line:
+                errs.append(f"bad source {t['id']}: {t['source']}")
+            # fix 5: no copied text by default
+            if "quote" in t:
+                errs.append(f"{t['id']}: quote copied without --quotes")
+            # fix 2: the query must not carry the answer line's own words (beyond the note's topic)
+            if not t["query"].startswith(REWRITE):
+                title = set(_words(clean_title(brain.note_title(text, v / path))))
+                leak = (set(_words(t["query"])) & set(_words(line))) - title
+                if len(leak) > 1:
+                    errs.append(f"{t['id']}: query leaks answer words {sorted(leak)}")
+        # fix 2 unit: a free-text line becomes a REWRITE placeholder, a field line a template question
+        from evals_gen import _question
+        if not _question("Pricing", "- Croissants cost 4 dollars each", None, "x.md", 3).startswith(REWRITE):
+            errs.append("free-text line should give a REWRITE: placeholder")
+        if _question("Ari Novak (2026-01-02)", "- Last: 2026-03-01 call", "Last", "x.md", 3) != "when was the last contact with Ari Novak":
+            errs.append("field template / title cleanup wrong")
+        from evals_gen import _boilerplate
+        stock = _boilerplate({"a.md": [(0, 3, "- Why: standing filter for jobs so we never re-derive it from chat", "Why")],
+                              "b.md": [(0, 4, "- Why: standing filter for leads so we never re-derive it from chat", "Why"),
+                                       (0, 5, "- Why: the oven fits the back room", "Why")]})
+        if stock != {("a.md", 3), ("b.md", 4)}:
+            errs.append(f"near-identical lines across notes should be skipped: {stock}")
+        if not _question("Pricing", "- Compiler notes: use gcc 12 always", "Compiler notes", "x.md", 3).startswith(REWRITE):
+            errs.append("an unknown field name should give a REWRITE: placeholder, not a template")
+
+        # fix 5: --quotes opt-in copies the exact line
+        b("evals", "init", "--quotes")
+        q = [t for t in yaml.safe_load(prop.read_text())["goldens"] if "expect_path" in t]
+        for t in q:
+            path, n = t["source"].rsplit(":", 1)
+            if t.get("quote") != (v / path).read_text().splitlines()[int(n) - 1].strip():
+                errs.append(f"--quotes: bad quote {t['id']}")
+
+        # fix 1: accept refuses placeholders, then unreviewed tests; --all-reviewed or reviewed: true passes
+        r = b("evals", "accept")
+        if r.returncode == 0 or REWRITE not in r.stdout or not prop.exists():
+            errs.append(f"accept must refuse REWRITE: placeholders: {r.returncode} {r.stdout}")
+        spec = yaml.safe_load(prop.read_text())
+        for t in spec["goldens"]:
+            if t["query"].startswith(REWRITE):
+                t["query"] = clean_title(brain.note_title((v / t["expect_path"]).read_text(), v / t["expect_path"]))
+        prop.write_text(yaml.safe_dump(spec, sort_keys=False))
+        r = b("evals", "accept")
+        if r.returncode == 0 or "reviewed" not in r.stdout or not prop.exists():
+            errs.append(f"accept must refuse unreviewed tests: {r.returncode} {r.stdout}")
+        spec["goldens"][0]["reviewed"] = True
+        prop.write_text(yaml.safe_dump(spec, sort_keys=False))
+        r = b("evals", "accept")
+        if r.returncode == 0:
+            errs.append("accept must refuse when only some tests are reviewed")
+        r = b("evals", "accept", "--all-reviewed")
         tests = v / "evals" / "retrieval_tests.yaml"
-        if prop.exists() or not tests.exists():
-            errs.append("accept should move proposed_tests.yaml into evals/retrieval_tests.yaml")
+        if r.returncode or prop.exists() or not tests.exists():
+            errs.append(f"accept --all-reviewed should move proposals into evals/retrieval_tests.yaml: {r.stdout}")
+        elif any("reviewed" in t for t in yaml.safe_load(tests.read_text())["goldens"]):
+            errs.append("accepted tests should not keep the reviewed flag")
         r = b("verify")
-        if f"passed: " not in r.stdout or "no evals" in r.stdout or "evals: none" in r.stdout:
+        if "passed: " not in r.stdout or "evals: none" in r.stdout:
             errs.append(f"verify should run the accepted tests: {r.stdout[-300:]}")
         print(r.stdout.strip().splitlines()[-4] if r.stdout.strip() else "", file=sys.stderr)
+
+        # fix 4: an empty or unknown-key tests file is RED and nonzero; legacy `cases:` is read
+        good = yaml.safe_load(tests.read_text())
+        for name, body in (("empty", {"recall_at_5_floor": 0.9, "goldens": []}),
+                           ("unknown key", {"recall_at_5_floor": 0.9, "tests": good["goldens"]})):
+            tests.write_text(yaml.safe_dump(body))
+            r = b("verify")
+            if r.returncode == 0 or "verify: RED" not in r.stdout or "tests_file: FAIL" not in r.stdout:
+                errs.append(f"{name} tests file must be RED and nonzero: {r.returncode} {r.stdout[-200:]}")
+        legacy = good["goldens"] + [{"id": "legacy-reject-list", "query": "croissant price", "reject_path": ["inbox/", "log/"]}]
+        good["goldens"] = legacy
+        tests.write_text(yaml.safe_dump({"recall_at_5_floor": 0.9, "cases": legacy}))
+        r = b("verify")
+        m = re.search(r"passed: (\d+)\s+failed: (\d+)", r.stdout)
+        if not m or int(m.group(1)) + int(m.group(2)) != len(good["goldens"]) or "tests_file" in r.stdout:
+            errs.append(f"legacy cases: should be read as goldens: {r.stdout[-200:]}")
     print("test_evals: " + ("PASS" if not errs else "FAIL\n  " + "\n  ".join(errs)))
     return 1 if errs else 0
 

@@ -84,6 +84,7 @@ Decisions and goals edge out people and projects as a tie-breaker. The dashboard
 - **RED** (verify fails): a canon note is newer than the index, the store was never indexed, or an inbox item is older than 48 h.
 - **YELLOW** (warning): a decision is past its `Revisit:` date.
 - **`flush`** = ingest, then verify, then commit. Write canon only through it. **`verify`** runs every golden question in the store's tests (`evals/retrieval_tests.yaml`, built with `evals init` / `evals accept`; with none yet, verify says so and stays YELLOW) and requires recall@5 ≥ 0.9, freshness not RED, and the built-in checks to pass (status, supersession, freshness fixtures).
+- **Tests file rules.** The top-level keys are `recall_at_5_floor` and `goldens:` (`cases:` is accepted as the older name). A tests file with 0 tests or any other top-level key makes verify RED and exit nonzero, so a typo can't turn into a silent pass.
 - **CI** (`.github/workflows/ci.yml`, on every push and pull request): gitleaks over full history, hook install, ingest, verify (fact store and novel example), the MCP end-to-end test, and `bench.py` followed by `git diff --exit-code README.md`, so the results table can't drift from the code.
 
 

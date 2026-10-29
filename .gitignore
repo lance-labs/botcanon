@@ -3,3 +3,5 @@ __pycache__/
 tools/status.json
 .venv/
 **/.index/
+evals/proposed_tests.yaml
+**/evals/proposed_tests.yaml

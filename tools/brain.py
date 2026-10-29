@@ -527,9 +527,26 @@ def feature_fixture() -> tuple[bool, str]:
 
 # ---------------------------------------------------------------- verify
 
-def load_tests() -> dict:
+TEST_KEYS = {"recall_at_5_floor", "goldens", "cases"}  # `cases:` is the legacy name for `goldens:`
+
+
+def load_tests(path: Path = None) -> tuple[dict, str]:
+    """(spec with tests under `goldens`, error). A file that would silently test nothing is an error."""
     import yaml
-    return yaml.safe_load(TESTS.read_text())
+    path = path or TESTS
+    raw = yaml.safe_load(path.read_text())
+    if not isinstance(raw, dict):
+        return {"goldens": []}, f"{path.name}: not a YAML mapping"
+    unknown = sorted(set(raw) - TEST_KEYS)
+    if unknown:
+        return {"goldens": []}, f"{path.name}: unknown top-level key(s) {unknown}; expected goldens: (or legacy cases:)"
+    if "goldens" in raw and "cases" in raw:
+        return {"goldens": []}, f"{path.name}: has both goldens: and cases:; keep one"
+    spec = dict(raw)
+    spec["goldens"] = spec.pop("cases", None) if "cases" in raw else spec.get("goldens")
+    if not isinstance(spec["goldens"], list) or not spec["goldens"]:
+        return {"goldens": []}, f"{path.name}: contains 0 tests"
+    return spec, ""
 
 
 def hooks_installed() -> tuple[bool, str]:
@@ -545,7 +562,7 @@ def hooks_installed() -> tuple[bool, str]:
 
 def verify(as_json: bool = False) -> bool:
     no_evals = not TESTS.is_file()
-    spec = {"goldens": []} if no_evals else load_tests()
+    spec, spec_err = ({"goldens": []}, "") if no_evals else load_tests()
     floor = float(spec.get("recall_at_5_floor", RECALL5_FLOOR))
     results, hit5, n5 = [], 0, 0
     for t in spec.get("goldens") or []:
@@ -565,7 +582,9 @@ def verify(as_json: bool = False) -> bool:
             hit5 += bool(rank and rank <= 5)
             ok = bool(rank and rank <= t.get("max_rank", 5))
             why = f"rank={rank}"
-        if t.get("reject_path") and any(p.startswith(t["reject_path"]) for p in paths):
+        rej = t.get("reject_path")
+        rej = tuple(rej) if isinstance(rej, list) else rej
+        if rej and any(p.startswith(rej) for p in paths):
             ok, why = False, f"rejected path present: {paths}"
         results.append({"id": t["id"], "ok": ok, "why": why})
     recall = hit5 / n5 if n5 else 1.0
@@ -576,6 +595,8 @@ def verify(as_json: bool = False) -> bool:
               "status_fixture": status_fixture(), "authority_fixture": authority_fixture(), "freshness_fixture": freshness_fixture(), "hooks": hooks_installed()}
     if VAULT == FIXTURE_VAULT:  # fixture-only feature checks; user stores skip this
         checks["feature_fixture"] = feature_fixture()
+    if spec_err:
+        checks["tests_file"] = (False, spec_err)
     ok = all(r["ok"] for r in results) and recall >= floor and fr["level"] != "red" and all(c[0] for c in checks.values())
     if as_json:
         print(json.dumps({"ok": ok, "no_evals": no_evals, "recall_at_5": recall, "results": results, "freshness": fr,
@@ -631,6 +652,7 @@ def flush(message: str, push: bool = True) -> int:
     status()
     if (VAULT / ".git").is_dir():
         git("add", "-A")
+        git("reset", "-q", "--", "evals/proposed_tests.yaml")  # unreviewed proposals are never committed
         c = git("commit", "-m", message)
         if c.returncode != 0 and "nothing to commit" not in c.stdout:
             print("flush: git commit failed (set git user.name/user.email?):\n" + c.stdout + c.stderr)
@@ -680,6 +702,8 @@ def main() -> int:
     ev = sub.add_parser("evals", help="build your own tests: init proposes, accept promotes")
     ev.add_argument("action", choices=["init", "accept"])
     ev.add_argument("--per-note", type=int, default=2)
+    ev.add_argument("--quotes", action="store_true", help="init: copy each answer line into the test file (off by default)")
+    ev.add_argument("--all-reviewed", action="store_true", help="accept: confirm you reviewed every proposed test")
     f = sub.add_parser("flush"); f.add_argument("-m", default="flush"); f.add_argument("--no-push", action="store_true")
     a = ap.parse_args()
     set_root(a.root, a.tests, a.dirs)
@@ -711,7 +735,9 @@ def main() -> int:
         print(json.dumps(status(), indent=2))
     elif a.cmd == "evals":
         from evals_gen import evals_accept, evals_init
-        print(evals_init(a.per_note) if a.action == "init" else evals_accept())
+        msg, rc = evals_init(a.per_note, a.quotes) if a.action == "init" else evals_accept(a.all_reviewed)
+        print(msg)
+        return rc
     elif a.cmd == "flush":
         return flush(a.m, not a.no_push)
     return 0
