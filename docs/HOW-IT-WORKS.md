@@ -20,6 +20,23 @@ flowchart LR
   R -->|otherwise| IDK["I don't know"]
 ```
 
+## The problem, in engineering terms
+
+
+- Agents forget everything between chats, or they misremember with confidence.
+- Chat "memory" is unverified. Nobody checks it, and it goes stale without warning.
+- Dumping notes into an embedding store returns whatever is closest, including outdated or low-authority facts. It never says "I don't know."
+- Almost nobody tests retrieval, so it breaks silently.
+
+What this kit does about each:
+
+- **Forgetting:** notes live in plain Markdown in git, outside any one chat, so every agent reads the same record.
+- **Unverified memory:** each fact carries who added it and where from (`why`), and agents can only `propose` to an inbox. A person promotes it.
+- **Stale or low-authority hits:** search ranks decisions above notes and logs, and demotes superseded decisions. Freshness checks go RED when the index lags. `answer` says "I don't know" when the evidence is weak.
+- **Untested retrieval:** `verify` runs golden questions on every change, and `bench.py` scores the retriever against plain embeddings.
+
+It is for one person, or a small team, who runs several AI agents and wants them to share a memory they can audit.
+
 ## Storage, and why each piece
 
 | Piece | What it holds | Why |

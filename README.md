@@ -1,10 +1,41 @@
 # second-brain-starter
 
-**TL;DR:** A shared, checkable memory for your AI assistants. Facts live in plain text files you own, in a GitHub repo. Your assistants search them before they answer, quote the line they relied on, and say "I don't know" when no note says it. A built-in test suite tells you when search gets worse. It runs on your own computer with no paid services.
+> Working name; a rename is under discussion.
 
-The sample vault describes Juniper Bakery, a fictional business. Replace it with your own notes.
+**Memory for your AI bots (Grok Bots first).** Instead of rereading long chat histories, your bots look up short, quoted facts from a set of notes you control, and say "I don't know" when the notes don't say.
+
+**How to read this page:** it starts plain and gets more technical as it goes. Stop whenever it stops being useful; the setup steps don't need anything past "Getting started".
+
+The sample notes describe Juniper Bakery, a fictional business. Replace them with your own.
+
+## In one minute
+
+- **The problem.** Bots that run for weeks either forget, or carry their whole chat history around. Rereading history uses up your plan's usage, fills the bot's working memory (its context window) so less room is left for the actual task, and is a poor way to find one fact buried in old messages.
+- **The fix.** Keep the facts that matter in a small set of notes. When a bot needs one, it asks a question and gets back a few lines with the file and line they came from, not the whole history.
+- **Trust.** Newer decisions outrank older ones, replaced facts are labelled as replaced, and a bot can only suggest new facts. You (or one bot you choose) decide what goes in.
+- **Who it's for.** People running one or more Grok Bots or other AI agents that need a shared, checkable memory.
+
+## What this is, and what it isn't
+
+- **It is your bots' memory:** the facts, decisions and rules they need to work, kept outside any one chat.
+- **It is not a replacement for your own notes app or personal second brain.** Keep using whatever you like for your own thinking.
+- **If you don't have one you like,** the same engine can run a separate vault for other material (a novel, project docs) without mixing it with your bots' memory. See [docs/EXTENDING.md](docs/EXTENDING.md).
+
+## Why not just keep the chat history?
+
+| | Rereading chat history | Looking it up here |
+|---|---|---|
+| What the bot reads | Everything said so far, relevant or not | A few quoted lines, ranked |
+| Usage | Grows with every message | Stays about the same size per question |
+| Room left for the task | Shrinks as history grows | Mostly untouched |
+| Finding an old fact | Depends on the bot noticing it in a long scroll | Search by words and by meaning, then a second check |
+| Outdated facts | Old and new statements sit side by side | Replaced facts are marked and ranked down |
+| Proof | "I remember" | `file:line "quote"`, checked against the file |
+
+**On usage savings: expected, not measured.** We have not measured token or usage savings on real bots. What we can measure: a lookup on the sample notes returns about 430 to 550 characters, roughly 110 to 140 tokens (assuming about 4 characters per token). To estimate your own saving, count the characters in a chat history your bot would otherwise reread, divide by 4, and compare with that lookup size. The saving only holds if the bot actually stops rereading the history; this tool doesn't control that.
 
 ## What you get
+
 
 - **One memory for all your assistants.** Notes are plain Markdown in git, so every agent, and you, read the same record. Nothing lives only in one chat.
 - **Answers you can check.** `answer` returns `file:line "quote"` and confirms the line is really in the file. In the author's vault, with agents following the [Agent rules](#agent-rules), made-up answers on a held-out set of 22 off-topic questions went from 22 to 0, while 1 of 10 real questions got a wrong "I don't know".
@@ -13,9 +44,10 @@ The sample vault describes Juniper Bakery, a fictional business. Replace it with
 - **It tells you when it breaks.** `verify` runs your test questions on every change and refuses to save if search got worse or the index is stale.
 - **Private and free to run.** Everything runs locally: SQLite and a small model, with no server and no API key.
 
-Not promised: it does not judge whether a fact is true, does not summarize across notes, and can still miss questions worded very differently from the note (see [Known limits](#known-limits)).
+Not promised: it does not judge whether a fact is true, does not summarize across notes, does not shrink a chat history by itself, and can still miss questions worded very differently from the note (see [Known limits](#known-limits)).
 
 ## What it costs
+
 
 | | |
 |---|---|
@@ -26,55 +58,8 @@ Not promised: it does not judge whether a fact is true, does not summarize acros
 | **Computer** | Any recent Mac, Windows or Linux machine. About 200 MB of disk, including a ~80 MB model downloaded on first run. |
 | **Ongoing** | Write notes and run `flush` after edits. Optional: a second agent with its own hidden test questions ([docs/EVAL-AGENT.md](docs/EVAL-AGENT.md)). |
 
-## The problem
-
-- Agents forget everything between chats, or they misremember with confidence.
-- Chat "memory" is unverified. Nobody checks it, and it goes stale without warning.
-- Dumping notes into an embedding store returns whatever is closest, including outdated or low-authority facts. It never says "I don't know."
-- Almost nobody tests retrieval, so it breaks silently.
-
-What this kit does about each:
-
-- **Forgetting:** notes live in plain Markdown in git, outside any one chat, so every agent reads the same record.
-- **Unverified memory:** each fact carries who added it and where from (`why`), and agents can only `propose` to an inbox. A person promotes it.
-- **Stale or low-authority hits:** search ranks decisions above notes and logs, and demotes superseded decisions. Freshness checks go RED when the index lags. `answer` says "I don't know" when the evidence is weak.
-- **Untested retrieval:** `verify` runs golden questions on every change, and `bench.py` scores the retriever against plain embeddings.
-
-It is for one person, or a small team, who runs several AI agents and wants them to share a memory they can audit.
-
-## How it works
-
-In one sentence: agents *propose* facts, a curator *promotes* the good ones into plain Markdown files, and a small rebuildable SQLite index answers questions over those files.
-
-```mermaid
-flowchart LR
-  A[Agent or person] -->|propose| I[inbox/*.md<br/>status: proposed]
-  I -->|curator promotes| C[Markdown canon<br/>decisions/ people/ projects/ GOALS.md<br/>status: approved]
-  I -->|every promotion| L[log/*.jsonl<br/>append-only]
-  C -->|flush: ingest + verify| S[(SQLite index<br/>.index/)]
-  L -.->|provenance| S
-  Q[Question] --> H[Hybrid search<br/>lexical BM25 + semantic cosine<br/>+ title match, fused by RRF]
-  S --> H
-  H --> R[Cross-encoder rerank<br/>top 20]
-  R -->|best score > -9.4| ANS[Answer + cited note]
-  R -->|otherwise| IDK["I don't know"]
-```
-
-**In plain words:** your notes are the record; the index is just a fast way to search them and can be rebuilt any time. A question is matched two ways, by exact words and by meaning, and a second model re-checks the best matches. Decisions count a little more than general notes, and replaced decisions sink. An answer must quote a line from a note that actually states the fact; otherwise you get "I don't know". Every change re-runs the test questions before it is saved.
-
-Full details (storage, status field, ranking weights, freshness, cite-and-verify, design rationale): [docs/HOW-IT-WORKS.md](docs/HOW-IT-WORKS.md). The design essay is [docs/WHY.md](docs/WHY.md).
-
-## Known limits
-
-- **The "I don't know" gate is NOT reliable for questions about the owner's personal attributes. Callers must check the citation themselves.** In the author's real vault at the -9.4 cutoff, a confident-looking but wrong answer came back for 5 of 6 calibration questions like "what is Lance's blood type" or "who is Lance's dentist", and for **22 of 22** questions in a separate held-out set (20 "Lance + attribute" questions such as favorite color, doctor or home address, plus 2 questions about a bot the vault knows nothing about). The owner's name appears in many notes, so the reranker scores these as relevant. On general off-topic questions with no owner name, 1 of 21 got a made-up answer ("what time does Costco close"). If the cited note doesn't say it, the brain doesn't know. Cite-and-verify plus rule 2 (Agent rules) brings this to 0 of 22 in the same test; the score gate alone does not.
-- It does not judge truth. It returns what the curator promoted.
-- It does not merge, summarize or reason across many notes. It returns ranked passages, and the calling agent writes the answer.
-- It is not multi-user or concurrent. Run one curator per store.
-- It indexes `.md` only. Paraphrases whose wording is far from the note can still miss the top 3; see the bench table.
-- Scores are calibrated on small stores. Re-check the -9.4 cutoff on yours with `bench.py`.
-- The reranker adds about 0.5 s per query on CPU.
-
 ## Getting started (no coding background)
+
 
 Setup times are estimates. The Windows steps are untested; reports welcome.
 
@@ -100,6 +85,52 @@ Setup times are estimates. The Windows steps are untested; reports welcome.
 
 Stuck? Paste the error into any AI assistant along with this README.
 
+## How it works
+
+Plain version: your notes are the record; the index is just a fast way to search them and can be rebuilt any time. A question is matched two ways, by exact words and by meaning, and a second model re-checks the best matches. Decisions count a little more than general notes, and replaced decisions sink. An answer must quote a line from a note that actually states the fact; otherwise you get "I don't know". Every change re-runs the test questions before it is saved.
+
+The pieces, for the curious:
+
+```mermaid
+flowchart LR
+  A[Agent or person] -->|propose| I[inbox/*.md<br/>status: proposed]
+  I -->|curator promotes| C[Markdown canon<br/>decisions/ people/ projects/ GOALS.md<br/>status: approved]
+  I -->|every promotion| L[log/*.jsonl<br/>append-only]
+  C -->|flush: ingest + verify| S[(SQLite index<br/>.index/)]
+  L -.->|provenance| S
+  Q[Question] --> H[Hybrid search<br/>lexical BM25 + semantic cosine<br/>+ title match, fused by RRF]
+  S --> H
+  H --> R[Cross-encoder rerank<br/>top 20]
+  R -->|best score > -9.4| ANS[Answer + cited note]
+  R -->|otherwise| IDK["I don't know"]
+```
+
+- **Notes** are plain Markdown files in git: the record. The **index** is a SQLite file built from them; delete it and it rebuilds.
+- **Search** runs two ways, exact words (BM25) and meaning (local embeddings), merges them, then a small second model re-scores the top 20.
+- **Trust ranking:** decisions and goals edge out other notes; replaced decisions and unreviewed proposals sink to 0.1.
+- **Answers** must quote a line that is verified to be in the file and states the asked fact (cite-and-verify); otherwise "I don't know".
+
+Full details (storage, status field, ranking weights, freshness, cite-and-verify, design rationale): [docs/HOW-IT-WORKS.md](docs/HOW-IT-WORKS.md). The design essay is [docs/WHY.md](docs/WHY.md).
+
+## Known limits
+
+- **The "I don't know" gate is NOT reliable for questions about the owner's personal attributes. Callers must check the citation themselves.** In the author's real vault at the -9.4 cutoff, a confident-looking but wrong answer came back for 5 of 6 calibration questions like "what is Lance's blood type" or "who is Lance's dentist", and for **22 of 22** questions in a separate held-out set (20 "Lance + attribute" questions such as favorite color, doctor or home address, plus 2 questions about a bot the vault knows nothing about). The owner's name appears in many notes, so the reranker scores these as relevant. On general off-topic questions with no owner name, 1 of 21 got a made-up answer ("what time does Costco close"). If the cited note doesn't say it, the brain doesn't know. Cite-and-verify plus rule 2 (Agent rules) brings this to 0 of 22 in the same test; the score gate alone does not.
+- It does not judge truth. It returns what the curator promoted.
+- It does not merge, summarize or reason across many notes. It returns ranked passages, and the calling agent writes the answer.
+- It is not multi-user or concurrent. Run one curator per store.
+- It indexes `.md` only. Paraphrases whose wording is far from the note can still miss the top 3; see the bench table.
+- Scores are calibrated on small stores. Re-check the -9.4 cutoff on yours with `bench.py`.
+- The reranker adds about 0.5 s per query on CPU.
+
+## Agent rules
+
+Put these in every agent's boot instructions. The numbers come from the author's real vault, measured on a held-out set written before any tuning: 22 off-topic "owner + attribute" questions (such as the owner's favorite color or doctor) and 10 answerable paraphrases.
+
+1. **Check the second brain before stating facts about the owner. Chat memory is a hint, not proof.** Memory feels confident whether or not it is right. So does search: with the score cutoff alone, 22 of 22 off-topic owner questions got a confident-looking wrong answer. Only a cited note counts.
+2. **Answer only from a quoted line in the cited note that states the fact. Otherwise say "I don't know".** This is the rule that fixed the gate. The quote check in code alone cut made-up answers from 22/22 to 1/22, but it said "I don't know" to 5 of 10 real questions, because notes word things differently ("son" vs the son's name). With an agent judging the verified candidate lines under this rule, the result was **0 of 22 made up and 1 of 10 false "I don't know"**. A related line ("Durable identity (accounts, emails)") is not an answer to "what is the owner's bank account number".
+3. **File lasting facts and decisions to `inbox/` with source and date. Never write canon directly (the curator is the exception).** `propose` writes `status: proposed`, which ranks at 0.1, and `verify` fails if a proposed note sits in canon. One reviewer keeps canon consistent, the log records who said what, and unreviewed text can't outrank a decision.
+4. **Before ending substantial work, update your HANDOFF note (`templates/HANDOFF.md`) with current work, next step and open items, each with its source file.** Session state isn't in the brain by design. In the pilot, "what is the bot working on right now" and "what is its next step" correctly got "I don't know" from the brain. The HANDOFF is the only place that state lives. Sources make it checkable at the next boot, and keeping it out of the index stops stale working notes from being quoted as facts.
+
 ## Quickstart (terminal)
 
 ```sh
@@ -124,15 +155,6 @@ python3 tools/bench.py                                                     # reg
 ```
 
 After you edit notes, run `python3 tools/brain.py flush -m "what changed"`. It re-ingests only changed files, runs verify, refuses to commit on RED, then commits and pushes. If nothing changed, it does nothing.
-
-## Agent rules
-
-Put these in every agent's boot instructions. The numbers come from the author's real vault, measured on a held-out set written before any tuning: 22 off-topic "owner + attribute" questions (such as the owner's favorite color or doctor) and 10 answerable paraphrases.
-
-1. **Check the second brain before stating facts about the owner. Chat memory is a hint, not proof.** Memory feels confident whether or not it is right. So does search: with the score cutoff alone, 22 of 22 off-topic owner questions got a confident-looking wrong answer. Only a cited note counts.
-2. **Answer only from a quoted line in the cited note that states the fact. Otherwise say "I don't know".** This is the rule that fixed the gate. The quote check in code alone cut made-up answers from 22/22 to 1/22, but it said "I don't know" to 5 of 10 real questions, because notes word things differently ("son" vs the son's name). With an agent judging the verified candidate lines under this rule, the result was **0 of 22 made up and 1 of 10 false "I don't know"**. A related line ("Durable identity (accounts, emails)") is not an answer to "what is the owner's bank account number".
-3. **File lasting facts and decisions to `inbox/` with source and date. Never write canon directly (the curator is the exception).** `propose` writes `status: proposed`, which ranks at 0.1, and `verify` fails if a proposed note sits in canon. One reviewer keeps canon consistent, the log records who said what, and unreviewed text can't outrank a decision.
-4. **Before ending substantial work, update your HANDOFF note (`templates/HANDOFF.md`) with current work, next step and open items, each with its source file.** Session state isn't in the brain by design. In the pilot, "what is the bot working on right now" and "what is its next step" correctly got "I don't know" from the brain. The HANDOFF is the only place that state lives. Sources make it checkable at the next boot, and keeping it out of the index stops stale working notes from being quoted as facts.
 
 ## Results
 
