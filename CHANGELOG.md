@@ -6,6 +6,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 
 ## [Unreleased]
 ### Fixed
+- `compile` picks the current decision by its `- Date:` among notes that are not superseded (by `Prior:` or `Status:`), not by filename order (BC-09). A bad line in `log/*.jsonl` is skipped instead of crashing `compile`/`why`, and verify fails with its file:line. Tested in `test_cite.py`.
 - Superseded notes are labelled and never quoted as the current fact (BC-03). `answer` cites only current notes; each source carries its status (`source_status` in MCP/JSON, `(superseded: not current)` in the CLI); when only replaced notes match it says "I don't know" and names the successor.
 - The documented promote path now reaches GREEN (BC-04): README layout, the curator paste block and the promote skill say every note carries `- Status:` and a replaced decision gets `- Status: superseded`; verify's status errors say exactly what to write or to run `tools/migrate_status.py`. A decision named on a `Prior:` line ranks low even if its Status still says approved.
 - `flush` no longer pushes by default (BC-06). `--push` pushes, and is refused when `gh repo view` reports the repo PUBLIC unless `--allow-public` is given; when visibility can't be read it says so. `--no-push` is kept as a no-op for old scripts. Tested with a fake `gh` in `test_flush.py`.

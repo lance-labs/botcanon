@@ -65,5 +65,19 @@ with tempfile.TemporaryDirectory() as td:
         _, q = answer(t, ask)
         check(f"tiny vault never cites Date: {ask}", "- Date:" not in q, q)
 
+# BC-09: compile picks by Date, not filename; a bad log line is reported, not fatal.
+with tempfile.TemporaryDirectory() as td:
+    v = Path(td) / "vault"
+    shutil.copytree(ROOT / "tests" / "fixtures" / "vault", v)
+    (v / "decisions" / "zz-old-opening-hours.md").write_text(
+        "# Decision: Opening hours (draft)\n\n- Status: approved\n- Date: 2025-12-01\n- Decision: Open daily.\n")
+    with open(v / "log" / "2026-03.jsonl", "a") as f:
+        f.write("{not json\n")
+    r = run(v, "compile", "opening-hours")
+    check("compile picks latest Date", r.returncode == 0 and "2026-03-01-opening-hours.md" in r.stdout and "Open daily" not in r.stdout.split("OUTRANKED")[0], r.stdout[:300] + r.stderr[-200:])
+    run(v, "ingest")
+    r = run(v, "verify")
+    check("verify reports a bad log line", r.returncode != 0 and "2026-03.jsonl:" in r.stdout, r.stdout[-300:])
+
 print("test_cite:", "PASS" if not FAILS else f"FAIL {FAILS}")
 sys.exit(1 if FAILS else 0)
