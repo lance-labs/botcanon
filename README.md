@@ -80,7 +80,7 @@ Setup times are estimates. The Windows steps are untested; reports welcome.
    ```
    On a fresh copy the last lines say `evals: none yet` and `verify: YELLOW`. That is expected: there are no notes or tests yet. The first run downloads a small search model (not data), so it takes a minute.
 9. **Add your notes.** Write a few short notes in `decisions/`, `people/` and `projects/` (one fact per line; see [How it works](#how-it-works)), and replace the stub in `GOALS.md`.
-10. **Build your own tests:** `python3 tools/brain.py evals init`. It reads your current notes (skipping replaced ones and `CURRENT.md`) and writes `evals/proposed_tests.yaml`, which is never committed. Each test names the note it should find and the line that holds the answer (`source:` and `expect_cite: path:line`). `verify` fails a test unless search finds the note **and** the bot's answer quotes that exact line. See [Your first run](#your-first-run). Where a fact has a clear field (Role, Why, Last contact), you get a ready question; otherwise the query says `REWRITE:` and you write the question you'd really ask, without copying the answer's words. Delete weak tests, set `reviewed: true` on each one you keep, then run `python3 tools/brain.py evals accept` (it refuses `REWRITE:` placeholders and unreviewed tests; `--all-reviewed` confirms you checked them all). Never change an expected note just to make a test pass. Add `--owner "<your name>"` to `init` to also test questions about you that the notes can't answer (the weak spot under Known limits). Add `--quotes` to `init` only if you want the answer line copied into the test file.
+10. **Build your own tests:** `python3 tools/brain.py evals init`. It reads your current notes (skipping replaced ones and `CURRENT.md`) and writes `evals/proposed_tests.yaml`, which is never committed. Each test names the note it should find and the line that holds the answer (`expect_quote:`, its text, with `source: path:line` as a hint). `verify` fails a test unless search finds the note **and** the bot's answer quotes a line in that note with that text. Line numbers can move as you edit; only the text matters. See [Your first run](#your-first-run). Where a fact has a clear field (Role, Why, Last contact), you get a ready question; otherwise the query says `REWRITE:` and you write the question you'd really ask, without copying the answer's words. Delete weak tests, set `reviewed: true` on each one you keep, then run `python3 tools/brain.py evals accept` (it refuses `REWRITE:` placeholders and unreviewed tests; `--all-reviewed` confirms you checked them all). Never change an expected note just to make a test pass. Add `--owner "<your name>"` to `init` to also test questions about you that the notes can't answer (the weak spot under Known limits). Add `--quotes` to `init` only if you want the answer line copied into the test file.
 11. **Save it:** `python3 tools/brain.py flush -m "my first notes" --push`. It re-indexes, runs your tests, commits only if nothing is RED, and with `--push` sends it to GitHub (it refuses if GitHub says the repo is public). verify should now say `GREEN`, and you can see the change on github.com.
 12. **Ask it something:** `python3 tools/brain.py answer "<a question your notes answer>"`. It quotes the line, or says "I don't know".
 
@@ -91,26 +91,27 @@ Stuck? Paste the error into any AI assistant along with this README.
 Expect some red on day one. That is normal: the tests are strict on purpose, and a failure usually means the question is too vague, not that your notes are wrong. Here is real output from the sample bakery vault (`tests/fixtures/vault`) after `evals init`, filling each `REWRITE:` with just the note's title, and `evals accept --all-reviewed`:
 
 ```text
-goals-13: FAIL rank=1 cite=expected GOALS.md:13, got GOALS.md:5 "Sample vault for Juniper Bakery, a fictional neighborhood bakery."
+goals-13: FAIL rank=1 cite=expected GOALS.md "one curator writes canon notes. everyone else drops proposals into `inbox/`.", got GOALS.md:5 "Sample vault for Juniper Bakery, a fictional neighborhood bakery."
 2026-02-01-pricing-8: PASS
 2026-02-15-supplier-8: PASS
 2026-03-01-opening-hours-8: PASS
-ari-novak-7: FAIL rank=1 cite=expected people/ari-novak.md:7, got people/ari-novak.md:5 "Flour supplier, owner of Stonegate Mill."
-dana-okafor-7: FAIL rank=1 cite=expected people/dana-okafor.md:7, got people/dana-okafor.md:5 "Bookkeeper for the bakery."
+ari-novak-7: FAIL rank=1 cite=expected people/ari-novak.md "delivers organic bread flour every monday.", got people/ari-novak.md:5 "Flour supplier, owner of Stonegate Mill."
+dana-okafor-7: FAIL rank=1 cite=expected people/dana-okafor.md "reconciles accounts on the first business day of each month.", got people/dana-okafor.md:5 "Bookkeeper for the bakery."
 ...
 passed: 8  failed: 7
 recall@5: 1.000 floor 0.9 PASS
 verify: RED
 ```
 
-`rank=1` means search found the right note; the failure is that the answer quoted a different line. The question "Ari Novak" doesn't ask for the delivery day, so the bot answered with his role. To fix a failing test, open `evals/retrieval_tests.yaml` and do one of these:
+`rank=1` means search found the right note; the failure is that the answer quoted a different line from the one in `expect_quote` (shown lowercased, without list markers, as verify compares it). The question "Ari Novak" doesn't ask for the delivery day, so the bot answered with his role. To fix a failing test, open `evals/retrieval_tests.yaml` and do one of these:
 
 - **Rewrite the question** so it asks for what that line says, in your own words. Changing `ari-novak-7` to `what day does Ari deliver flour` and `dana-okafor-7` to `when does Dana reconcile the accounts` turned both to PASS (`passed: 10  failed: 5`).
-- **Rewrite the source line** if the note itself is unclear, for example a fact buried in a long sentence. If the edit moves the line, update `expect_cite` to the new `path:line`.
+- **Rewrite the source line** if the note itself is unclear, for example a fact buried in a long sentence, then copy the new wording into `expect_quote`. Adding or removing other lines doesn't matter; tests match the line's text, not its number.
+- **Changed a fact?** When you edit an answer line (a new price, a new day), its test fails until you update `expect_quote`. That is on purpose: it makes you confirm the new fact is the one your bots should give.
 - **Delete the test** if the line isn't a fact worth remembering.
 - **Start over** for a note you changed a lot: delete its tests, run `evals init` again, review, and `evals accept`.
 
-Never point `expect_cite` at whatever line the bot quotes today just to make it pass; that hides the miss. Run `verify` until it is GREEN.
+Never set `expect_quote` to whatever line the bot quotes today just to make it pass; that hides the miss. Run `verify` until it is GREEN.
 
 ## How it works
 

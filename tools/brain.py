@@ -612,6 +612,18 @@ def hooks_installed() -> tuple[bool, str]:
     return True, "installed"
 
 
+def norm_line(text: str) -> str:
+    """Line text compared by answer checks: list markers, case, and spacing don't matter."""
+    return " ".join(re.sub(r"^\s*(?:[-*+]|\d+[.)])\s+", "", text or "").lower().split())
+
+
+def line_text(path: str, n: int) -> str:
+    try:
+        return (VAULT / path).read_text(encoding="utf-8").splitlines()[int(n) - 1]
+    except (OSError, IndexError, ValueError):
+        return ""
+
+
 def verify(as_json: bool = False) -> bool:
     no_evals = not TESTS.is_file()
     spec, spec_err = ({"goldens": []}, "") if no_evals else load_tests()
@@ -639,12 +651,19 @@ def verify(as_json: bool = False) -> bool:
             hit5 += bool(rank and rank <= 5)
             ok = bool(rank and rank <= t.get("max_rank", 5))
             why = f"rank={rank}"
-            if ok and t.get("expect_cite"):  # answer-level: the cited answer must quote the source line
+            if ok and (t.get("expect_quote") or t.get("expect_cite")):  # answer-level: the answer must quote the fact's line
                 from cite import cited_answer
                 r = cited_answer(t["query"])
                 cite_ = r.get("citation", "") if r["known"] else ""
-                ok = cite_.startswith(t["expect_cite"] + (":" if ":" not in t["expect_cite"] else " "))
-                why = f"rank={rank} cite={'expected ' + t['expect_cite'] + ', got ' + (cite_ or 'no answer') if not ok else 'ok'}"
+                if t.get("expect_quote"):  # line text, so edits that shift line numbers don't break the test
+                    c = r["candidates"][0] if r["known"] else None
+                    got = norm_line(line_text(c["path"], c["line"])) if c else ""
+                    ok = bool(c) and c["path"] in want and got == norm_line(t["expect_quote"])
+                    want_s = f'{"|".join(want)} "{t["expect_quote"]}"'
+                else:  # legacy: exact path:line
+                    ok = cite_.startswith(t["expect_cite"] + (":" if ":" not in t["expect_cite"] else " "))
+                    want_s = t["expect_cite"]
+                why = f"rank={rank} cite={'expected ' + want_s + ', got ' + (cite_ or 'no answer') if not ok else 'ok'}"
         rej = t.get("reject_path")
         rej = tuple(rej) if isinstance(rej, list) else rej
         if rej and any(p.startswith(rej) for p in paths):

@@ -137,17 +137,38 @@ def main() -> int:
         if "passed: " not in r.stdout or "evals: none" in r.stdout:
             errs.append(f"verify should run the accepted tests: {r.stdout[-300:]}")
         acc = yaml.safe_load(tests.read_text())["goldens"]
-        if any(t.get("expect_cite") != t.get("source") for t in acc if "expect_path" in t):
-            errs.append("every answerable init test must carry expect_cite = its source line")
-        # BC-05: a wrong expected line must FAIL even when retrieval ranks the note first
-        bad = dict(next(t for t in acc if "expect_path" in t and re.search(rf"^{re.escape(t['id'])}: PASS", r.stdout, re.M)))
-        bad["id"] = "wrong-cite"
-        bad["expect_cite"] = bad["expect_path"] + ":9999"
+        for t in (t for t in acc if "expect_path" in t):
+            path, n = t["source"].rsplit(":", 1)
+            if t.get("expect_quote") != brain.norm_line((v / path).read_text().splitlines()[int(n) - 1]):
+                errs.append(f"{t['id']}: init must record expect_quote = the source line's normalized text")
+        good_t = next(t for t in acc if "expect_path" in t and re.search(rf"^{re.escape(t['id'])}: PASS", r.stdout, re.M))
         keep = tests.read_text()
-        tests.write_text(yaml.safe_dump({"recall_at_5_floor": 0.0, "goldens": [bad]}))
-        rb = b("verify")
+
+        def one(t: dict) -> subprocess.CompletedProcess:
+            tests.write_text(yaml.safe_dump({"recall_at_5_floor": 0.0, "goldens": [t]}))
+            b("ingest")
+            return b("verify")
+        # legacy expect_cite still read: a wrong expected line must FAIL even when retrieval ranks the note first
+        legacy = {k: v_ for k, v_ in good_t.items() if k != "expect_quote"} | {"id": "wrong-cite", "expect_cite": good_t["expect_path"] + ":9999"}
+        rb = one(legacy)
         if not re.search(r"^wrong-cite: FAIL .*cite=expected", rb.stdout, re.M) or rb.returncode == 0:
-            errs.append(f"a test whose answer doesn't quote expect_cite must fail: {rb.stdout[-300:]}")
+            errs.append(f"a legacy test whose answer doesn't quote expect_cite must fail: {rb.stdout[-300:]}")
+        # BC-05 follow-up: a line inserted above the answer must not break the test; changing the answer must
+        note = v / good_t["expect_path"]
+        orig = note.read_text()
+        lines = orig.splitlines(keepends=True)
+        n = int(good_t["source"].rsplit(":", 1)[1])
+        note.write_text("".join(lines[:n - 1] + ["\n"] + lines[n - 1:]))
+        rb = one(good_t)
+        if not re.search(rf"^{re.escape(good_t['id'])}: PASS", rb.stdout, re.M):
+            errs.append(f"expect_quote must survive a line inserted above the answer: {[l for l in rb.stdout.splitlines() if good_t['id'] in l]}")
+        changed = lines[n - 1].rstrip("\n") + " Changed on 2026-10-29.\n"
+        note.write_text("".join(lines[:n - 1] + [changed] + lines[n:]))
+        rb = one(good_t)
+        if not re.search(rf"^{re.escape(good_t['id'])}: FAIL .*cite=expected", rb.stdout, re.M) or rb.returncode == 0:
+            errs.append(f"expect_quote must fail when the answer line's text changes: {rb.stdout[-300:]}")
+        note.write_text(orig)
+        b("ingest")
         tests.write_text(keep)
         print(r.stdout.strip().splitlines()[-4] if r.stdout.strip() else "", file=sys.stderr)
 
