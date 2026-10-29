@@ -342,8 +342,41 @@ def context_for(path: str, line: int) -> dict:
     return {"headings": chain, "block": [{"line": n, "text": t} for n, t in block], "path": path}
 
 
+def scope_line_ok(q: str, r: dict, dflts: list) -> bool:
+    """A scope with a default rulebook covers a question only when the cited scope line states the question's
+    words verbatim: all of them when there are 1-2, else at least 2 (as in rescue). Otherwise the scope is silent
+    and the default rulebook answers. Lines outside the gated scope are not judged here."""
+    m = re.match(r"^(.+?):(\d+) ", r.get("citation", ""))
+    if not m or brain.scope_gate(m.group(1)) is None:
+        return True
+    qs = q
+    for gate, _, _ in dflts:
+        qs = gate.sub(" ", qs)
+    terms = list(term_weights(qs))
+    need = len(terms) if len(terms) <= 2 else 2
+    lw = _words(r["answer"].split("] ", 1)[-1])  # the rule text, not its breadcrumb
+    return sum(t in lw for t in terms) >= need
+
+
 def cited_answer(q: str) -> dict:
     r = _cited_answer(q)
+    dflts = brain.scope_defaults(q)
+    if r.get("known") and dflts and not scope_line_ok(q, r, dflts):  # a loose league line is not "covered by the league"
+        r = {"known": False, "answer": "I don't know: no league line states it.", "sources": r["sources"], "candidates": r.get("candidates", []),
+             "source_status": r.get("source_status", {}), "check": [f'league line too loose: {r.get("citation", "")[:120]}']}
+    if not r.get("known"):  # a scope silent on the question defers to its declared default rulebook, labeled
+        for gate, dflt, title in ([] if unseen_terms(q) else dflts):  # strict: a word the vault never uses -> I don't know
+            brain.SCOPE_OVERRIDE = dflt
+            try:
+                f = _cited_answer(gate.sub(" ", q))
+            finally:
+                brain.SCOPE_OVERRIDE = None
+            if f.get("known"):
+                f["default_for"] = title
+                f["answer"] = f"Not covered by {title} rules; NFHS default applies: " + f["answer"] \
+                    if "nfhs" in dflt.pattern.lower() else f"Not covered by {title} rules; default applies: " + f["answer"]
+                r = f
+                break
     m = re.match(r"^(.+?):(\d+) ", r.get("citation", "")) if r.get("known") else None
     if m:
         r["context"] = context_for(m.group(1), int(m.group(2)))

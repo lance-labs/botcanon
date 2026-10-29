@@ -157,9 +157,33 @@ def scope_gate(path: str):
     return _GATE[path][1]
 
 
+DEFAULT_RE = re.compile(r"^-\s*Scope-default:\s*(.+)$", re.MULTILINE)
+SCOPE_OVERRIDE: "re.Pattern | None" = None  # set by cite.cited_answer for the default-rulebook fallback
+
+
+def scope_defaults(q: str) -> list[tuple["re.Pattern", "re.Pattern", str]]:
+    """Gated notes in scope for q that declare `- Scope-default: PATH_REGEX` (the rulebook that applies
+    where the scope is silent). Returns (gate, default path regex, scope title) per distinct default."""
+    out, seen = [], set()
+    for f in canon_files(VAULT):
+        p = rel(f)
+        g = scope_gate(p)
+        if g is None or not g.search(q):
+            continue
+        m = DEFAULT_RE.search(f.read_text())
+        if m and (g.pattern, m.group(1).strip()) not in seen:
+            seen.add((g.pattern, m.group(1).strip()))
+            t = next((l.lstrip("# ").split(":", 1)[0].split(" (")[0] for l in f.read_text().splitlines() if l.startswith("# ")), p)
+            out.append((g, re.compile(m.group(1).strip()), t))
+    return out
+
+
 def apply_scope_gates(q: str, paths: set[str]) -> set[str]:
-    """Paths allowed for query q (see scope_gate)."""
+    """Paths allowed for query q (see scope_gate). Under SCOPE_OVERRIDE only ungated notes whose path
+    matches the override are allowed (the scope's declared default rulebook)."""
     gates = {p: scope_gate(p) for p in paths}
+    if SCOPE_OVERRIDE is not None:
+        return {p for p, g in gates.items() if g is None and SCOPE_OVERRIDE.search(p)}
     inscope = {p for p, g in gates.items() if g is not None and g.search(q)}
     return inscope if inscope else {p for p, g in gates.items() if g is None}
 
@@ -667,6 +691,8 @@ def verify(as_json: bool = False) -> bool:
             ok = known == bool(t["expect_known"]) or bool(t.get("allow_idk") and not known)  # allow_idk: right line or "I don't know"
             if ok and known and t.get("expect_cite"):  # "path:line" (or just "path") the quote must come from
                 ok = cite_.startswith(t["expect_cite"] + (":" if ":" not in t["expect_cite"] else " "))
+            if ok and known and "expect_default" in t:  # scope fallback: label must name the silent scope ("" = no fallback)
+                ok = (r.get("default_for") or "") == t["expect_default"]
             results.append({"id": t["id"], "ok": ok, "why": f"known={known} {cite_}".strip()})
             continue
         hits = search(t["query"], k=t.get("k", 5), mode=t.get("mode", "hybrid"))

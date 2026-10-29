@@ -170,6 +170,21 @@ with tempfile.TemporaryDirectory() as td:
     check("scope-gate serves gated note when named", "lg.md" in q2, q2)
     check("named scope excludes ungated notes", "hs.md" not in q3, q3)
 
+# Scope-default: a named scope silent on the question defers to its default rulebook, labeled; covered questions stay in scope
+with tempfile.TemporaryDirectory() as td:
+    for d in ("projects", "decisions"):
+        (Path(td) / d).mkdir()
+    (Path(td) / "projects" / "lg.md").write_text("# Acme League: Pitching\n\n- Status: approved\n- Scope-gate: \\bacme\\b\n- Scope-default: ^decisions/nfhs\n\n## Pitching\n- Acme pitchers may throw 75 pitches per game.\n")
+    (Path(td) / "decisions" / "nfhs-balk.md").write_text("# NFHS\n\n- Status: approved\n\n## Balk\n- A balk is an illegal act by the pitcher with runners on base; each runner advances one base.\n")
+    (Path(td) / "decisions" / "ghsa.md").write_text("# GHSA\n\n- Status: approved\n\n## Mound visits\n- Three mound visits per game are allowed.\n")
+    run(Path(td), "ingest")
+    d1 = run(Path(td), "answer", "Acme: what is a balk?").stdout
+    _, d2 = answer(Path(td), "how many pitches per game may Acme pitchers throw")
+    _, d3 = answer(Path(td), "Acme: how many mound visits are allowed?")
+    check("silent scope falls back to its default, labeled", "Not covered by Acme League rules; NFHS default applies" in d1 and "nfhs-balk.md" in d1, d1)
+    check("covered question stays in scope", "lg.md" in d2 and "Not covered" not in d2, d2)
+    check("fallback only searches the default rulebook", "ghsa.md" not in d3, d3)
+
 # Age groups and numbers are identifiers: "9U"/"12U" are content words and only match exactly
 check("2-char digit tokens are content words", cite._keep("9u") and cite._keep("46") and not cite._keep("in"))
 check("12u does not cover a 10U line", cite.coverage({"12u": 1.0}, "10U: Base Path=60'") == 0.0)
