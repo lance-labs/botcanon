@@ -490,6 +490,18 @@ def revisit_due(text: str) -> str | None:
     return d.group(1) if d else None
 
 
+INBOX_DATE_RE = re.compile(r"^date:\s*(\S+)", re.MULTILINE)
+
+
+def inbox_ts(p: Path) -> float:
+    """When a proposal was filed: its `date:` frontmatter (survives clones), else file mtime."""
+    m = INBOX_DATE_RE.search(p.read_text(errors="replace")[:500])
+    try:
+        return datetime.fromisoformat(m.group(1)).timestamp() if m else p.stat().st_mtime
+    except ValueError:
+        return p.stat().st_mtime
+
+
 def freshness(vault: Path = None, last_index_ts: str | None = None, today: date | None = None,
               dirs: tuple[str, ...] | None = None) -> dict:
     vault = vault or VAULT
@@ -503,9 +515,9 @@ def freshness(vault: Path = None, last_index_ts: str | None = None, today: date 
     else:
         red.append("never indexed")
     now = datetime.now().timestamp()
-    old = [p.name for p in (vault / "inbox").glob("*.md") if (now - p.stat().st_mtime) / 3600 > INBOX_MAX_HOURS] if (vault / "inbox").is_dir() else []
-    if old:
-        red.append(f"{len(old)} inbox item(s) older than {INBOX_MAX_HOURS}h")
+    old = [p.name for p in (vault / "inbox").glob("*.md") if (now - inbox_ts(p)) / 3600 > INBOX_MAX_HOURS] if (vault / "inbox").is_dir() else []
+    if old:  # a reminder, not a blocker: an old proposal must not stop unrelated saves
+        yellow.append(f"{len(old)} inbox item(s) older than {INBOX_MAX_HOURS}h: curate or discard them")
     sup = superseded(vault)
     due = []
     for p in sorted((vault / "decisions").glob("*.md")) if (vault / "decisions").is_dir() else []:
