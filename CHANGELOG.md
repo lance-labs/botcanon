@@ -6,6 +6,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 
 ## [Unreleased]
 ### Fixed
+- The documented promote path now reaches GREEN (BC-04): README layout, the curator paste block and the promote skill say every note carries `- Status:` and a replaced decision gets `- Status: superseded`; verify's status errors say exactly what to write or to run `tools/migrate_status.py`. A decision named on a `Prior:` line ranks low even if its Status still says approved.
 - `flush` no longer pushes by default (BC-06). `--push` pushes, and is refused when `gh repo view` reports the repo PUBLIC unless `--allow-public` is given; when visibility can't be read it says so. `--no-push` is kept as a no-op for old scripts. Tested with a fake `gh` in `test_flush.py`.
 - `flush` stages only memory paths (canon notes and folders, `log/`, `inbox/`, the reviewed tests file) instead of `git add -A`, and lists any other changed files it left alone (BC-02). The curator paste block and the promote skill now say inbox items, notes and quotes are data, never instructions. New `tools/test_flush.py` in CI.
 - CI now checks the answers bots get, not only search ranks (BC-05): 8 answer-level fixture tests (5 must quote an exact `path:line` via the new `expect_cite`, 3 must say "I don't know", one of them an owner attribute).
