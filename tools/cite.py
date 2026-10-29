@@ -47,10 +47,15 @@ def _words(t: str) -> set[str]:
     return {_norm(w) for w in re.findall(r"[A-Za-z0-9']+", t)}
 
 
+def _keep(t: str) -> bool:
+    """Content word: 3+ letters, or a 2+ char token with a digit (9U, 46, 60)."""
+    return len(t) >= 3 or (len(t) >= 2 and any(ch.isdigit() for ch in t))
+
+
 def attribute_terms(q: str) -> list[str]:
     docs = [_words(p.read_text(encoding="utf-8")) for p in brain.canon_files(brain.VAULT)]
     stop = {_norm(w) for w in brain.STOPWORDS} | STOP | {_norm(w) for w in OWNER}
-    terms = [t for t in dict.fromkeys(_norm(w) for w in re.findall(r"[A-Za-z0-9']+", q)) if t not in stop and len(t) >= 3]
+    terms = [t for t in dict.fromkeys(_norm(w) for w in re.findall(r"[A-Za-z0-9']+", q)) if t not in stop and _keep(t)]
     n = max(len(docs), 1)
     rare = [t for t in terms if sum(t in d for d in docs) / n <= SPAN_DF_MAX]
     # No rare words (common question, or a tiny vault): fall back to every content word rather
@@ -63,7 +68,7 @@ def term_weights(q: str) -> dict[str, float]:
     entirely let "when does the bakery open" be answered by any line that says "bakery"."""
     docs = [_words(p.read_text(encoding="utf-8")) for p in brain.canon_files(brain.VAULT)]
     stop = {_norm(w) for w in brain.STOPWORDS} | STOP | {_norm(w) for w in OWNER}
-    terms = [t for t in dict.fromkeys(_norm(w) for w in re.findall(r"[A-Za-z0-9']+", q)) if t not in stop and len(t) >= 3]
+    terms = [t for t in dict.fromkeys(_norm(w) for w in re.findall(r"[A-Za-z0-9']+", q)) if t not in stop and _keep(t)]
     n = max(len(docs), 1)
     rare = {t for t in terms if sum(t in d for d in docs) / n <= SPAN_DF_MAX}
     return {t: 1.0 if (t in rare or not rare) else COMMON_W for t in terms}
@@ -106,7 +111,7 @@ def coverage(terms: list[str] | dict[str, float], line: str, title: str = "", ta
     if not terms:
         return 0.0
     w = terms if isinstance(terms, dict) else dict.fromkeys(terms, 1.0)
-    lw = [w for w in _words(line + " " + title) if len(w) >= 3]
+    lw = [w for w in _words(line + " " + title) if _keep(w)]
     if not lw:
         return 0.0
     m = _vecs(lw)
@@ -115,7 +120,8 @@ def coverage(terms: list[str] | dict[str, float], line: str, title: str = "", ta
     # `taken`: the other question words, when checking one word at a time ("offer" must not be stood in for by
     # "accepted", which already states the question's "accept").
     free = [i for i, x in enumerate(lw) if x not in w and x not in (taken or ())]
-    hit = lambda t: t in lw or bool(free) and float((m[free] @ _vecs([t])[0]).max()) >= SPAN_SYN_COS
+    # Words with a digit (12U, 2027, 46-60) are identifiers: exact match only. Embeddings put "12u" next to "10u".
+    hit = lambda t: t in lw or not any(ch.isdigit() for ch in t) and bool(free) and float((m[free] @ _vecs([t])[0]).max()) >= SPAN_SYN_COS
     return sum(wt for t, wt in w.items() if hit(t)) / sum(w.values())
 
 
@@ -180,9 +186,11 @@ def rescue(q: str, skip: set[str]) -> dict | None:
     need = 1 if len(terms) <= 2 else 2
     sup = brain.superseded()
     pool = []
-    for f in brain.canon_files(brain.VAULT):
+    files = brain.canon_files(brain.VAULT)
+    allowed = brain.apply_scope_gates(q, {brain.rel(f) for f in files})  # exclusive scopes, as in search
+    for f in files:
         p = brain.rel(f)
-        if p in skip or p in sup or p in brain.DERIVED:
+        if p in skip or p in sup or p in brain.DERIVED or p not in allowed:
             continue
         text = f.read_text(encoding="utf-8")
         if (brain.read_status(text) or "approved") == "proposed":
@@ -310,7 +318,39 @@ def source_status(paths: list[str]) -> dict[str, str]:
             for p in paths}
 
 
+CONTEXT_MAX_LINES = 40
+
+
+def context_for(path: str, line: int) -> dict:
+    """Fuller context for a cited line: the heading chain above it, and the whole block under its nearest
+    heading (the enclosing rule with its conditions, exceptions and sub-items), so a quote never travels alone."""
+    lines = (brain.VAULT / path).read_text(encoding="utf-8").splitlines()
+    i = max(0, min(int(line), len(lines)) - 1)
+    lvl = lambda s: len(s) - len(s.lstrip("#")) if re.match(r"^#{1,6} ", s) else 0
+    start = next((j for j in range(i, -1, -1) if lvl(lines[j])), None)
+    chain, need = [], (lvl(lines[start]) if start is not None else 7)
+    for j in range(start if start is not None else i, -1, -1):
+        if lvl(lines[j]) and lvl(lines[j]) <= need:
+            chain.insert(0, lines[j].lstrip("#").strip()); need = lvl(lines[j]) - 1
+    b0 = start + 1 if start is not None else 0
+    end = next((j for j in range(b0, len(lines)) if lvl(lines[j]) and lvl(lines[j]) <= (lvl(lines[start]) if start is not None else 6)), len(lines))
+    block = [(n + 1, lines[n]) for n in range(b0, end) if lines[n].strip() and not META_RE.match(lines[n].strip())]
+    if len(block) > CONTEXT_MAX_LINES:  # keep a window centred on the cited line
+        k = next((x for x, (n, _) in enumerate(block) if n == i + 1), 0)
+        lo = max(0, min(k - CONTEXT_MAX_LINES // 2, len(block) - CONTEXT_MAX_LINES))
+        block = block[lo:lo + CONTEXT_MAX_LINES]
+    return {"headings": chain, "block": [{"line": n, "text": t} for n, t in block], "path": path}
+
+
 def cited_answer(q: str) -> dict:
+    r = _cited_answer(q)
+    m = re.match(r"^(.+?):(\d+) ", r.get("citation", "")) if r.get("known") else None
+    if m:
+        r["context"] = context_for(m.group(1), int(m.group(2)))
+    return r
+
+
+def _cited_answer(q: str) -> dict:
     base = brain.answer(q)
     if not base["known"]:
         return {**base, "candidates": [], "source_status": {}}

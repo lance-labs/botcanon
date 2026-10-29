@@ -144,5 +144,36 @@ check("what-date refuses month range + provenance date", cite.check_line("On wha
 c2 = {"quote": "- Started at PwC on Jan 10, 2011.", "path": "decisions/2026-02-15-supplier.md", "line": 3}
 check("what-date accepts a day-level date", cite.DAY_RE.search(c2["quote"]) is not None)
 
+# Context block: a cited line comes with its heading chain and the whole enclosing block, never alone
+with tempfile.TemporaryDirectory() as td:
+    (Path(td) / "projects").mkdir()
+    (Path(td) / "projects" / "r.md").write_text("# League\n\n- Status: approved\n\n## Pitching\n\n### e\n- e. Pitch limits (may exceed to finish an at bat);\n- e › vi. 14U will not exceed 95 pitches.\n- e › viii. EXCEPTION: may finish the batter.\n\n### f\n- f. Once a pitcher leaves he may not return.\n")
+    brain.set_root(td, None, None)
+    cx = cite.context_for("projects/r.md", 9)
+    texts = [b["text"] for b in cx["block"]]
+    check("context has heading chain", cx["headings"] == ["League", "Pitching", "e"], str(cx["headings"]))
+    check("context has parent condition and exception", any("Pitch limits" in t for t in texts) and any("EXCEPTION" in t for t in texts), str(texts))
+    check("context stops at the next rule", not any("may not return" in t for t in texts) and not any("Status:" in t for t in texts), str(texts))
+    brain.set_root(str(ROOT / "tests" / "fixtures" / "vault"), None, None)
+
+# Scope-gate: a gated note answers only when the query names its scope, and then excludes ungated notes
+with tempfile.TemporaryDirectory() as td:
+    for d in ("projects", "decisions"):
+        (Path(td) / d).mkdir()
+    (Path(td) / "projects" / "lg.md").write_text("# Acme League\n\n- Status: approved\n- Scope-gate: \\bacme\\b\n\n## Pitching\n- Acme pitchers may throw 75 pitches per game.\n")
+    (Path(td) / "decisions" / "hs.md").write_text("# State\n\n- Status: approved\n\n## Pitching\n- Varsity pitchers may throw 110 pitches per game.\n")
+    run(Path(td), "ingest")
+    _, q1 = answer(Path(td), "how many pitches per game may pitchers throw")
+    _, q2 = answer(Path(td), "how many pitches per game may Acme pitchers throw")
+    _, q3 = answer(Path(td), "how many pitches per game may Acme varsity pitchers throw")
+    check("scope-gate hides gated note from unscoped query", "lg.md" not in q1 and "hs.md" in q1, q1)
+    check("scope-gate serves gated note when named", "lg.md" in q2, q2)
+    check("named scope excludes ungated notes", "hs.md" not in q3, q3)
+
+# Age groups and numbers are identifiers: "9U"/"12U" are content words and only match exactly
+check("2-char digit tokens are content words", cite._keep("9u") and cite._keep("46") and not cite._keep("in"))
+check("12u does not cover a 10U line", cite.coverage({"12u": 1.0}, "10U: Base Path=60'") == 0.0)
+check("12u covers the 12U line", cite.coverage({"12u": 1.0}, "12U: Base Path=70'") == 1.0)
+
 print("test_cite:", "PASS" if not FAILS else f"FAIL {FAILS}")
 sys.exit(1 if FAILS else 0)

@@ -140,6 +140,30 @@ def status_of(path: str) -> str | None:
     return _STATUS[path][1]
 
 
+_GATE: dict[str, tuple[float, "re.Pattern | None"]] = {}
+GATE_RE = re.compile(r"^-\s*Scope-gate:\s*(.+)$", re.MULTILINE)
+
+
+def scope_gate(path: str):
+    """Optional `- Scope-gate: REGEX` on a note: the note is an exclusive scope (e.g. one league's rulebook).
+    It is searchable only when the query matches REGEX, and when it does, ungated notes are dropped.
+    Cached per file mtime like status_of."""
+    fp = VAULT / path
+    mt = fp.stat().st_mtime if fp.is_file() else -1.0
+    hit = _GATE.get(path)
+    if hit is None or hit[0] != mt:
+        m = GATE_RE.search(fp.read_text()) if mt >= 0 else None
+        _GATE[path] = (mt, re.compile(m.group(1).strip(), re.I) if m else None)
+    return _GATE[path][1]
+
+
+def apply_scope_gates(q: str, paths: set[str]) -> set[str]:
+    """Paths allowed for query q (see scope_gate)."""
+    gates = {p: scope_gate(p) for p in paths}
+    inscope = {p for p, g in gates.items() if g is not None and g.search(q)}
+    return inscope if inscope else {p for p, g in gates.items() if g is None}
+
+
 def path_weight(path: str, sup: set[str]) -> float:
     """Authority ranking. Explicit status first, then folder + Prior: fallback."""
     st = status_of(path)
@@ -325,7 +349,8 @@ def search(q: str, k: int = 5, mode: str = "hybrid") -> list[dict]:
     out, per = [], {}
     rows = {r["id"]: r for r in conn.execute(
         f"SELECT id,path,heading,text FROM chunks WHERE id IN ({','.join('?' * len(scores)) or 'NULL'})", list(scores))}
-    for cid, sc in sorted(((c, s * path_weight(rows[c]["path"], sup)) for c, s in scores.items()), key=lambda x: (-round(x[1], 12), rows[x[0]]["path"], x[0])):  # ties: path, then position in note
+    allowed = apply_scope_gates(q, {r["path"] for r in rows.values()})
+    for cid, sc in sorted(((c, s * path_weight(rows[c]["path"], sup)) for c, s in scores.items() if rows[c]["path"] in allowed), key=lambda x: (-round(x[1], 12), rows[x[0]]["path"], x[0])):  # ties: path, then position in note
         r = rows[cid]
         if per.get(r["path"], 0) >= MAX_HITS_PER_NOTE:
             continue
@@ -851,6 +876,10 @@ def main() -> int:
         print(r["answer"])
         if r.get("citation"):
             print(f"  quote: {r['citation']} (verified in file)")
+        if r.get("context"):  # the enclosing heading and rule block, so the quote is read with its conditions
+            print("  context: " + " › ".join(r["context"]["headings"]))
+            for b in r["context"]["block"]:
+                print(f'    {b["line"]}: {b["text"]}')
         for s_ in r["sources"]:
             tag = r.get("source_status", {}).get(s_, "")
             print(f"  source: {s_}" + (f" ({tag}: not current)" if tag in ("superseded", "proposed") else ""))
