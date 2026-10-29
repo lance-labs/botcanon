@@ -652,7 +652,17 @@ def flush_paths() -> list[str]:
     return list(dict.fromkeys(out))
 
 
-def flush(message: str, push: bool = True) -> int:
+def remote_visibility() -> str:
+    """'PRIVATE' | 'PUBLIC' | 'INTERNAL' from `gh repo view`, or '' when it can't be read."""
+    try:
+        r = subprocess.run(["gh", "repo", "view", "--json", "visibility", "-q", ".visibility"],
+                           cwd=VAULT, capture_output=True, text=True, timeout=20)
+        return r.stdout.strip().upper() if r.returncode == 0 else ""
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+
+
+def flush(message: str, push: bool = False, allow_public: bool = False) -> int:
     """Once per batch: ingest only what changed, verify, commit, push. No-op when nothing changed."""
     conn = connect()
     li = meta(conn, "last_index_ts")
@@ -684,6 +694,13 @@ def flush(message: str, push: bool = True) -> int:
             print("flush: git commit failed (set git user.name/user.email?):\n" + c.stdout + c.stderr)
             return 1
         if push and git("remote").stdout.strip():
+            vis = remote_visibility()
+            if vis == "PUBLIC" and not allow_public:
+                print("flush: committed locally; NOT pushed: GitHub says this repo is PUBLIC. "
+                      "Make it private, or pass --allow-public if you really mean to publish your notes.")
+                return 1
+            if not vis:
+                print("flush: could not confirm the remote is private (gh missing or not a GitHub repo); pushing as asked")
             p = git("push")
             if p.returncode:
                 print(p.stderr)
@@ -731,7 +748,10 @@ def main() -> int:
     ev.add_argument("--quotes", action="store_true", help="init: copy each answer line into the test file (off by default)")
     ev.add_argument("--owner", default=os.environ.get("BRAIN_OWNER", ""), help="init: also propose 'I don't know' tests about this person (default $BRAIN_OWNER)")
     ev.add_argument("--all-reviewed", action="store_true", help="accept: confirm you reviewed every proposed test")
-    f = sub.add_parser("flush"); f.add_argument("-m", default="flush"); f.add_argument("--no-push", action="store_true")
+    f = sub.add_parser("flush"); f.add_argument("-m", default="flush")
+    f.add_argument("--push", action="store_true", help="also git push (off by default; refused if GitHub says the repo is public)")
+    f.add_argument("--no-push", action="store_true", help="(default; kept for old scripts)")
+    f.add_argument("--allow-public", action="store_true", help="with --push: push even to a public repo")
     a = ap.parse_args()
     set_root(a.root, a.tests, a.dirs)
     if a.cmd == "ingest":
@@ -766,7 +786,7 @@ def main() -> int:
         print(msg)
         return rc
     elif a.cmd == "flush":
-        return flush(a.m, not a.no_push)
+        return flush(a.m, a.push and not a.no_push, a.allow_public)
     return 0
 
 
