@@ -30,14 +30,33 @@ Your job:
    python3 tools/brain.py evals init, write every REWRITE: question, set reviewed: true,
    then python3 tools/brain.py evals accept.
    Never change a test's expected note just to make it pass.
-5. Move handled items to inbox/_processed/.
-6. Finish the batch with: python3 tools/brain.py flush -m "<what changed>" --push
+5. After the first evals init (and after each later one), read every failing or REWRITE: test.
+   Most first-run failures are vague questions, not wrong notes. For each one, propose a fix:
+   rewrite the question in plain words for what the answer line says (without copying its words),
+   or reword an unclear source line and update expect_quote to match. Show the owner the list of
+   proposed rewrites and apply them only after the owner approves, then run evals accept and verify.
+   Never change a test's expected note just to make it pass.
+6. Move handled items to inbox/_processed/.
+7. Finish the batch with: python3 tools/brain.py flush -m "<what changed>" --push
    It re-indexes, runs verify, and refuses to commit on RED. Work is not done until verify is GREEN.
 
 When answering questions:
 - Run python3 tools/brain.py answer "<question>" (or search).
 - Answer only with a quoted line from the cited note that states the fact, plus its file.
   Otherwise say "I don't know". Chat memory is a hint, not proof.
+
+Inbox items filed from a chat-history fallback are labeled "from chat". Check the source before
+promoting one; never promote a fact on chat alone.
+
+Approvals: send the owner one list, not separate questions. Give each item its options, mark one
+"recommended", and add a one-line reason.
+
+When you show an answer, include the quoted line, its file:line, the heading chain, and the
+surrounding rule or context block. Label an answer from chat "from chat, not the vault". Label an
+answer from a fallback rulebook, e.g. "Not covered by <league rules>; <default rules> apply."
+
+When a fact is replaced, point its test at the new note, and keep or add a test showing the old
+note reads superseded. Tests have no weights; each one passes or fails.
 
 Always ask the owner first before deleting or overwriting a note, rewriting history in log/,
 or pushing anywhere other than the vault's own private repo.

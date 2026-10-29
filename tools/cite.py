@@ -166,7 +166,7 @@ def _ce(q: str, docs: list[str]) -> list[float]:
 
 
 def top_note_ok(q: str, c: dict, top: str) -> bool:
-    """Ported from the Lance vault: in the top-ranked note, half coverage is enough when the line's own
+    """Ported from the author's own vault: in the top-ranked note, half coverage is enough when the line's own
     words carry the asked attribute and the cross-encoder scores (question, "title. line") >= RESCUE_CE."""
     if c["path"] != top or c["coverage"] < SPAN_COVER_TOP or coverage(term_weights(q), c["quote"]) <= 0:
         return False
@@ -176,7 +176,7 @@ def top_note_ok(q: str, c: dict, top: str) -> bool:
 
 
 def rescue(q: str, skip: set[str]) -> dict | None:
-    """Fallback search (ported from the Lance vault, 2026-10-29): when the top notes hold no stating line,
+    """Fallback search (ported from the author's own vault, 2026-10-29): when the top notes hold no stating line,
     look line by line through every other current note. A line needs the question's distinctive words verbatim
     (2, or all of them when there are 1-2), full coverage as usual plus a cross-encoder logit >= RESCUE_CE,
     or a clear win over the runner-up. Superseded, proposed and derived notes are never searched."""
@@ -400,6 +400,12 @@ def _cited_answer(q: str) -> dict:
     if missing and not (cands and states_unseen(q, cands[0])):
         return {"known": False, "answer": f"I don't know: the vault never mentions {', '.join(missing)}.",
                 "sources": base["sources"], "source_status": st, "candidates": cands}
+    # A why-question that matches a note strongly is answered by that note's own "- Why:" line, if it has one
+    if re.match(r"^\s*why\b", q, re.I) and cands and cands[0]["coverage"] >= SPAN_COVER:
+        w = next((c for c in cands if c["path"] == cands[0]["path"] and re.match(r"^[-*]?\s*Why\s*:", c["quote"], re.I)), None)
+        if w and not check_line(q, w):
+            return {"known": True, "answer": w["quote"], "sources": base["sources"], "source_status": st, "candidates": cands,
+                    "citation": f'{w["path"]}:{w["line"]} "{w["quote"]}"'}
     if cands and cands[0]["coverage"] < SPAN_COVER and top_note_ok(q, cands[0], current[0]) and not check_line(q, cands[0]):
         c = cands[0]
         return {"known": True, "answer": c["quote"], "sources": base["sources"], "source_status": st, "candidates": cands,
