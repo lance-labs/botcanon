@@ -27,3 +27,8 @@ goldens:
   - {id: idk-off-topic, query: "what is the capital of Peru", expect_known: false}
   - {id: idk-not-in-vault, query: "what is the employee dental plan", expect_known: false}
   - {id: idk-owner-attr, query: "what is Dana Okafor's passport number", expect_known: false}
+  # Wrong answers found 2026-10-29 (a word "close enough" by embedding stood in for the asked one): right line or I don't know
+  - {id: idk-bakery-phone, query: "what is the bakery's phone number", expect_known: false}
+  - {id: idk-bakery-owner, query: "who owns the bakery", expect_known: false}
+  - {id: cite-flour-order-time, query: "when do flour orders need to be placed", expect_known: true, allow_idk: true, expect_cite: "people/ari-novak.md:8"}
+  - {id: cite-bakery-sells, query: "what does the bakery sell", expect_known: true, allow_idk: true, expect_cite: "decisions/2026-02-01-pricing.md:8"}

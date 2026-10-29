@@ -2,7 +2,7 @@
 
 cited_answer(q) runs brain.answer (search + rerank gate), then picks the best line in the cited notes.
 A line counts only if it states at least 2/3 of the question's weighted content words, exactly or through a
-word-embedding synonym (cosine 0.75 or higher). Distinctive words (in at most 25% of notes) weigh 1.0, common
+word-embedding synonym (cosine 0.78 or higher). Distinctive words (in at most 25% of notes) weigh 1.0, common
 ones 0.6, so one shared common or rare word alone never answers a two-word question. Ties go to the higher-ranked
 note, then to the line that states more on its own (not via the note title).
 The quote is checked to be literally present at path:line. Otherwise: I don't know.
@@ -16,7 +16,7 @@ import re
 import brain
 
 SPAN_DF_MAX = 0.25
-SPAN_SYN_COS = 0.75
+SPAN_SYN_COS = 0.78  # 0.75 let bakery~flour, sell~buy, order~deliver, number~one count as the same word
 SPAN_COVER = 2 / 3
 COMMON_W = 0.6  # weight of a common question word next to a rare one (1.0); 1 rare + 1 common hit alone = 0.625 < 2/3
 STOP = {"what", "who", "when", "where", "which", "how", "why", "does", "did", "the",
@@ -83,7 +83,11 @@ def coverage(terms: list[str] | dict[str, float], line: str, title: str = "") ->
     if not lw:
         return 0.0
     m = _vecs(lw)
-    return sum(wt for t, wt in w.items() if t in lw or float((m @ _vecs([t])[0]).max()) >= SPAN_SYN_COS) / sum(w.values())
+    # A line word that already matches a question word exactly can't also stand in for another one
+    # ("Prefers phone." must not cover both "phone" and "number").
+    free = [i for i, x in enumerate(lw) if x not in w]
+    hit = lambda t: t in lw or bool(free) and float((m[free] @ _vecs([t])[0]).max()) >= SPAN_SYN_COS
+    return sum(wt for t, wt in w.items() if hit(t)) / sum(w.values())
 
 
 def in_file(c: dict) -> bool:
