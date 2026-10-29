@@ -20,6 +20,8 @@ from pathlib import Path
 
 import numpy as np
 
+if __name__ == "__main__":  # one module, so `import brain` in cite/evals_gen sees --root
+    sys.modules.setdefault("brain", sys.modules[__name__])
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from note_status import STATUS_RE, read_status, status_check, status_fixture  # noqa: E402
 
@@ -27,7 +29,18 @@ TOOLS = Path(__file__).resolve().parent
 VAULT = Path(os.environ.get("BRAIN_VAULT", TOOLS.parent)).resolve()
 INDEX_DIR = VAULT / ".index"
 DB_PATH = INDEX_DIR / "brain.db"
-TESTS = TOOLS / "retrieval_tests.yaml"
+FIXTURE_VAULT = (TOOLS.parent / "tests" / "fixtures" / "vault").resolve()  # CI/bench only; never a user vault
+
+
+def default_tests(vault: Path) -> Path:
+    """A store's goldens: <vault>/retrieval_tests.yaml, else <vault>/evals/retrieval_tests.yaml (made by evals accept)."""
+    for p in (vault / "retrieval_tests.yaml", vault / "evals" / "retrieval_tests.yaml", vault / "tools" / "retrieval_tests.yaml"):
+        if p.is_file():
+            return p
+    return vault / "evals" / "retrieval_tests.yaml"
+
+
+TESTS = default_tests(VAULT)
 SCHEMA_VERSION = "2"  # bump when indexed text changes; forces a full rebuild
 EMBED_MODEL = os.environ.get("BRAIN_EMBED_MODEL", "BAAI/bge-small-en-v1.5")
 
@@ -531,13 +544,19 @@ def hooks_installed() -> tuple[bool, str]:
 
 
 def verify(as_json: bool = False) -> bool:
-    spec = load_tests()
+    no_evals = not TESTS.is_file()
+    spec = {"goldens": []} if no_evals else load_tests()
     floor = float(spec.get("recall_at_5_floor", RECALL5_FLOOR))
     results, hit5, n5 = [], 0, 0
-    for t in spec["goldens"]:
+    for t in spec.get("goldens") or []:
+        ok, why = True, ""
+        if "expect_known" in t:  # answer-level golden: cite-and-verify must (not) find a stated line
+            from cite import cited_answer
+            known = bool(cited_answer(t["query"])["known"])
+            results.append({"id": t["id"], "ok": known == bool(t["expect_known"]), "why": f"known={known}"})
+            continue
         hits = search(t["query"], k=t.get("k", 5), mode=t.get("mode", "hybrid"))
         paths = [h["path"] for h in hits]
-        ok, why = True, ""
         if t.get("expect_empty"):
             ok, why = not hits, f"got {paths[:3]}"
         if "expect_path" in t:
@@ -555,11 +574,11 @@ def verify(as_json: bool = False) -> bool:
     st_ok, st_errs = status_check(VAULT, canon_files(), superseded())
     checks = {"status_check": (st_ok, f"{len(canon_files())} canon notes" + ("" if st_ok else ": " + "; ".join(st_errs[:5]))),
               "status_fixture": status_fixture(), "authority_fixture": authority_fixture(), "freshness_fixture": freshness_fixture(), "hooks": hooks_installed()}
-    if VAULT == TOOLS.parent:  # sample-vault features; other stores skip this
+    if VAULT == FIXTURE_VAULT:  # fixture-only feature checks; user stores skip this
         checks["feature_fixture"] = feature_fixture()
     ok = all(r["ok"] for r in results) and recall >= floor and fr["level"] != "red" and all(c[0] for c in checks.values())
     if as_json:
-        print(json.dumps({"ok": ok, "recall_at_5": recall, "results": results, "freshness": fr,
+        print(json.dumps({"ok": ok, "no_evals": no_evals, "recall_at_5": recall, "results": results, "freshness": fr,
                           "checks": {k: {"ok": a, "reason": b} for k, (a, b) in checks.items()}}, indent=2))
         return ok
     for r in results:
@@ -571,7 +590,9 @@ def verify(as_json: bool = False) -> bool:
     print(f"freshness: {fr['level'].upper()} {'; '.join(fr['red'] + fr['yellow'])}")
     for d in fr["revisit_due"]:
         print(f"  revisit due: {d['path']} ({d['revisit']})")
-    print(f"verify: {'GREEN' if ok and fr['level'] == 'green' else 'YELLOW' if ok else 'RED'}")
+    if no_evals:
+        print(f"evals: none yet ({TESTS.relative_to(VAULT) if TESTS.is_relative_to(VAULT) else TESTS}); run: python3 tools/brain.py evals init")
+    print(f"verify: {'GREEN' if ok and fr['level'] == 'green' and not no_evals else 'YELLOW' if ok else 'RED'}")
     return ok
 
 
@@ -632,9 +653,7 @@ def set_root(root: str | None, tests: str | None, dirs: str | None) -> None:
         VAULT = Path(root).resolve()
         INDEX_DIR = VAULT / ".index"
         DB_PATH = INDEX_DIR / "brain.db"
-        TESTS = VAULT / "retrieval_tests.yaml"
-        if not TESTS.exists():
-            TESTS = VAULT / "tools" / "retrieval_tests.yaml"
+        TESTS = default_tests(VAULT)
     if tests:
         TESTS = Path(tests).resolve()
     if dirs:
@@ -644,7 +663,7 @@ def set_root(root: str | None, tests: str | None, dirs: str | None) -> None:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--root", help="store to operate on (default: this repo, or $BRAIN_VAULT)")
-    ap.add_argument("--tests", help="goldens file (default: <root>/retrieval_tests.yaml or <root>/tools/...)")
+    ap.add_argument("--tests", help="goldens file (default: <root>/retrieval_tests.yaml, else <root>/evals/retrieval_tests.yaml)")
     ap.add_argument("--dirs", help="comma-separated content dirs to index (default: decisions,people,projects)")
     sub = ap.add_subparsers(dest="cmd", required=True)
     g = sub.add_parser("ingest"); g.add_argument("--full", action="store_true")
@@ -658,6 +677,9 @@ def main() -> int:
     w = sub.add_parser("why"); w.add_argument("query")
     pr = sub.add_parser("propose"); pr.add_argument("text"); pr.add_argument("--from-agent", required=True)
     pr.add_argument("--source", required=True)
+    ev = sub.add_parser("evals", help="build your own tests: init proposes, accept promotes")
+    ev.add_argument("action", choices=["init", "accept"])
+    ev.add_argument("--per-note", type=int, default=2)
     f = sub.add_parser("flush"); f.add_argument("-m", default="flush"); f.add_argument("--no-push", action="store_true")
     a = ap.parse_args()
     set_root(a.root, a.tests, a.dirs)
@@ -687,6 +709,9 @@ def main() -> int:
         print(propose(a.text, a.from_agent, a.source))
     elif a.cmd == "status":
         print(json.dumps(status(), indent=2))
+    elif a.cmd == "evals":
+        from evals_gen import evals_accept, evals_init
+        print(evals_init(a.per_note) if a.action == "init" else evals_accept())
     elif a.cmd == "flush":
         return flush(a.m, not a.no_push)
     return 0

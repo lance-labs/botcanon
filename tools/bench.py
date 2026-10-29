@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Benchmark: plain embeddings (baseline) vs lexical vs this repo's hybrid, on evals/public_set.yaml.
+"""Benchmark: plain embeddings (baseline) vs lexical vs this repo's hybrid, on the test fixture's evals/public_set.yaml.
 
 Writes the results table into README.md between the BENCH markers. Re-run after any retrieval change:
-    python3 tools/bench.py [--set evals/public_set.yaml] [--no-readme]
+    python3 tools/bench.py [--root tests/fixtures/vault] [--set <root>/evals/public_set.yaml] [--no-readme]
 """
 from __future__ import annotations
 
@@ -71,7 +71,7 @@ def score(fn, qs) -> dict:
 
 def table(results: dict) -> str:
     n = next(iter(results.values()))
-    lines = [f"Public set: {n['n_pos']} answerable + {n['n_neg']} no-answer questions (`evals/public_set.yaml`).", "",
+    lines = [f"Public set: {n['n_pos']} answerable + {n['n_neg']} no-answer questions (`tests/fixtures/vault/evals/public_set.yaml`, a fictional test fixture).", "",
              "| System | Hit@1 | Hit@5 | MRR | No-answer correct |", "|---|---:|---:|---:|---:|"]
     for name, r in results.items():
         lines.append(f"| {name} | {r['hit@1']:.2f} | {r['hit@5']:.2f} | {r['mrr']:.2f} | {r['no_answer']:.2f} |")
@@ -80,14 +80,17 @@ def table(results: dict) -> str:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--set", default=str(brain.VAULT / "evals" / "public_set.yaml"))
+    ap.add_argument("--root", default=str(brain.FIXTURE_VAULT), help="store to score (default: the test fixture)")
+    ap.add_argument("--set", default=None, help="question set (default: <root>/evals/public_set.yaml)")
     ap.add_argument("--no-readme", action="store_true")
     a = ap.parse_args()
+    brain.set_root(a.root, None, None)
+    a.set = a.set or str(brain.VAULT / "evals" / "public_set.yaml")
     qs = yaml.safe_load(Path(a.set).read_text())["questions"]
     brain.ingest()
     t = table({name: score(fn, qs) for name, fn in SYSTEMS.items()})
     print(t)
-    readme = brain.VAULT / "README.md"
+    readme = brain.TOOLS.parent / "README.md"  # the repo README, whichever store was scored
     if not a.no_readme and readme.exists():
         s = readme.read_text()
         new = re.sub(r"(<!-- BENCH:START -->\n).*?(<!-- BENCH:END -->)", lambda m: m.group(1) + t + "\n" + m.group(2), s, flags=re.S)

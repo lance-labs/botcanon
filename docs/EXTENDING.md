@@ -10,6 +10,6 @@ python3 tools/brain.py --root examples/novel --dirs chapters verify
 # or: BRAIN_VAULT=/path/to/store BRAIN_DIRS=chapters,notes python3 tools/brain.py verify
 ```
 
-Each store keeps its own `.index/` and reads goldens from `<root>/retrieval_tests.yaml` (or pass `--tests`). `examples/novel/` is a two-chapter worked example whose goldens include a check that nothing from the fact store leaks in. For a codebase, point `--dirs` at its Markdown docs, such as `docs,adr`. The engine indexes `.md` only.
+Each store keeps its own `.index/` and reads goldens from `<root>/retrieval_tests.yaml`, else `<root>/evals/retrieval_tests.yaml` (or pass `--tests`). `examples/novel/` is a two-chapter worked example whose goldens include a check that nothing from the fact store leaks in. For a codebase, point `--dirs` at its Markdown docs, such as `docs,adr`. The engine indexes `.md` only.
 
 This works with any agent that can run a shell command. One worked example is Grok Bot: one bot curates the fact store, another owns the novel store, and each runs `flush` on its own store only. Nothing here depends on Grok Bot.

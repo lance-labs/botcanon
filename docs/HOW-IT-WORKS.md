@@ -83,7 +83,7 @@ Decisions and goals edge out people and projects as a tie-breaker. The dashboard
 
 - **RED** (verify fails): a canon note is newer than the index, the store was never indexed, or an inbox item is older than 48 h.
 - **YELLOW** (warning): a decision is past its `Revisit:` date.
-- **`flush`** = ingest, then verify, then commit. Write canon only through it. **`verify`** runs every golden question in `retrieval_tests.yaml` and requires recall@5 ≥ 0.9, freshness not RED, and the built-in checks to pass (status, supersession, freshness fixtures).
+- **`flush`** = ingest, then verify, then commit. Write canon only through it. **`verify`** runs every golden question in the store's tests (`evals/retrieval_tests.yaml`, built with `evals init` / `evals accept`; with none yet, verify says so and stays YELLOW) and requires recall@5 ≥ 0.9, freshness not RED, and the built-in checks to pass (status, supersession, freshness fixtures).
 - **CI** (`.github/workflows/ci.yml`, on every push and pull request): gitleaks over full history, hook install, ingest, verify (fact store and novel example), the MCP end-to-end test, and `bench.py` followed by `git diff --exit-code README.md`, so the results table can't drift from the code.
 
 
@@ -93,7 +93,7 @@ Decisions and goals edge out people and projects as a tie-breaker. The dashboard
 
 ## Retrieval results: notes on the public set
 
-The sample vault is tiny (10 notes), so these numbers show how the pieces behave. They don't predict quality on a large vault. Run the script on your own vault with your own public set. The public set is never used for tuning, so its misses stay in the table: two flour questions rank the supplier decision above the supplier's note, "who does the books" misses, and "employee dental plan" returned notes until the reranker gate (below); with the gate on, all 3 no-answer questions now come back "I don't know", at the cost of one real question also getting "I don't know". Ten paraphrase questions (indirect wording, no names) were added on 2026-10-28. Before them, hybrid and lexical tied at Hit@1 0.83. With them, lexical falls to 0.68 while hybrid holds at 0.75, which is the case hybrid exists for.
+The test fixture (`tests/fixtures/vault/`, fictional, CI and bench only) is tiny (10 notes), so these numbers show how the pieces behave. They don't predict quality on a large vault. Run the script on your own vault with your own public set. The public set is never used for tuning, so its misses stay in the table: two flour questions rank the supplier decision above the supplier's note, "who does the books" misses, and "employee dental plan" returned notes until the reranker gate (below); with the gate on, all 3 no-answer questions now come back "I don't know", at the cost of one real question also getting "I don't know". Ten paraphrase questions (indirect wording, no names) were added on 2026-10-28. Before them, hybrid and lexical tied at Hit@1 0.83. With them, lexical falls to 0.68 while hybrid holds at 0.75, which is the case hybrid exists for.
 
 ## Design
 

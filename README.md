@@ -4,7 +4,7 @@
 
 **How to read this page:** it starts plain and gets more technical as it goes. Stop whenever it stops being useful; the setup steps don't need anything past "Getting started".
 
-The sample notes describe Juniper Bakery, a fictional business. Replace them with your own.
+Your vault starts empty: a skeleton of folders and a `GOALS.md` stub. Nothing to delete first.
 
 ## In one minute
 
@@ -30,14 +30,14 @@ The sample notes describe Juniper Bakery, a fictional business. Replace them wit
 | Outdated facts | Old and new statements sit side by side | Replaced facts are marked and ranked down |
 | Proof | "I remember" | `file:line "quote"`, checked against the file |
 
-**On usage savings: expected, not measured.** We have not measured token or usage savings on real bots. What we can measure: a lookup on the sample notes returns about 430 to 550 characters, roughly 110 to 140 tokens (assuming about 4 characters per token). To estimate your own saving, count the characters in a chat history your bot would otherwise reread, divide by 4, and compare with that lookup size. Savings depend on your bots looking things up here instead of relying on long chats. The agent rules below make that the default; the chat app still decides how much history it loads.
+**On usage savings: expected, not measured.** We have not measured token or usage savings on real bots. What we can measure: a lookup on the small test fixture returns about 430 to 550 characters, roughly 110 to 140 tokens (assuming about 4 characters per token). To estimate your own saving, count the characters in a chat history your bot would otherwise reread, divide by 4, and compare with that lookup size. Savings depend on your bots looking things up here instead of relying on long chats. The agent rules below make that the default; the chat app still decides how much history it loads.
 
 ## What you get
 
 
 - **One memory for all your assistants.** Notes are plain Markdown in git, so every agent, and you, read the same record. Nothing lives only in one chat.
 - **Answers you can check.** `answer` returns `file:line "quote"` and confirms the line is really in the file. In the author's vault, with agents following the [Agent rules](#agent-rules), made-up answers on a held-out set of 22 off-topic questions went from 22 to 0, while 1 of 10 real questions got a wrong "I don't know".
-- **Better search than plain embeddings, measured.** On the public sample set: top-result hit rate 0.79 vs 0.75 for plain embeddings, and no-answer questions handled correctly 3 of 3 vs 0 of 3. It's a small set; run `bench.py` on yours.
+- **Better search than plain embeddings, measured.** On the public test set (a small fictional fixture in `tests/fixtures/`, used only by CI and the bench): top-result hit rate 0.79 vs 0.75 for plain embeddings, and no-answer questions handled correctly 3 of 3 vs 0 of 3. It's a small set; run `bench.py` on yours.
 - **You stay in charge.** Agents can only propose to `inbox/`. You, or one curator agent, decide what becomes a fact, and the log keeps who said what, and when.
 - **It tells you when it breaks.** `verify` runs your test questions on every change and refuses to save if search got worse or the index is stale.
 - **Private and free to run.** Everything runs locally: SQLite and a small model, with no server and no API key.
@@ -77,9 +77,11 @@ Setup times are estimates. The Windows steps are untested; reports welcome.
    python3 tools/brain.py ingest
    python3 tools/brain.py verify
    ```
-   The last line should end with `verify: GREEN`. The first run downloads a small model, so it takes a minute.
-9. **Ask it something:** `python3 tools/brain.py answer "how much can we spend on the new oven"`. It answers from the sample bakery notes and quotes the line.
-10. **Make it yours.** Replace the bakery notes in `decisions/`, `people/` and `projects/` with your own, then run `python3 tools/brain.py flush -m "my first notes"`. GitHub Desktop shows the change, and you can see it on github.com.
+   On a fresh copy the last lines say `evals: none yet` and `verify: YELLOW`. That is expected: there are no notes or tests yet. The first run downloads a small search model (not data), so it takes a minute.
+9. **Add your notes.** Write a few short notes in `decisions/`, `people/` and `projects/` (one fact per line; see [How it works](#how-it-works)), and replace the stub in `GOALS.md`.
+10. **Build your own tests:** `python3 tools/brain.py evals init`. It reads your notes and writes `evals/proposed_tests.yaml`: one question per fact-like line, each with the note it should find and the quoted line, plus a few off-topic questions that must get "I don't know". Reword the questions the way you'd really ask them, delete weak ones, then run `python3 tools/brain.py evals accept`. Never change an expected note just to make a test pass.
+11. **Save it:** `python3 tools/brain.py flush -m "my first notes"`. It re-indexes, runs your tests, and commits only if nothing is RED; verify should now say `GREEN`. GitHub Desktop shows the change, and you can see it on github.com.
+12. **Ask it something:** `python3 tools/brain.py answer "<a question your notes answer>"`. It quotes the line, or says "I don't know".
 
 Stuck? Paste the error into any AI assistant along with this README.
 
@@ -137,29 +139,31 @@ python3 -m venv .venv && . .venv/bin/activate
 pip install -r requirements.txt          # fastembed downloads BAAI/bge-small-en-v1.5 on first use
 tools/install-hooks.sh                   # needs gitleaks on PATH (see Secret scanning)
 python3 tools/brain.py ingest
-python3 tools/brain.py verify            # expect: verify: GREEN
-python3 tools/brain.py search "who supplies our flour"
-python3 tools/brain.py compile opening-hours
+python3 tools/brain.py verify            # empty vault: YELLOW, "no evals yet; run evals init"
+python3 tools/brain.py evals init        # after adding notes: propose tests from them
+python3 tools/brain.py evals accept      # after reviewing evals/proposed_tests.yaml
 ```
 
 More commands:
 
 ```sh
-python3 tools/brain.py answer "how much can we spend on the new oven"   # cited answer, or "I don't know" (exit 2)
-python3 tools/brain.py why "opening hours"                                 # provenance: From, Source, Date, log claims
-python3 tools/brain.py propose "Rye arrives Fridays." --from-agent ordering-agent --source "invoice 0150"
-python3 tools/bench.py                                                     # regenerate the results table below
-./demo.sh                                                                  # a narrated tour on a throwaway copy, about 1 minute
+python3 tools/brain.py search "<question>"                                 # ranked hits with file:line
+python3 tools/brain.py answer "<question>"                                 # cited answer, or "I don't know" (exit 2)
+python3 tools/brain.py why "<topic>"                                       # provenance: From, Source, Date, log claims
+python3 tools/brain.py compile <entity>                                    # current facts, with OUTRANKED/SUPERSEDED history
+python3 tools/brain.py propose "<fact>" --from-agent <bot> --source "<where>"
+python3 tools/bench.py                                                     # regenerate the results table below (scores the test fixture)
+./demo.sh                                                                  # a narrated tour on a throwaway copy of the test fixture, about 1 minute
 ```
 
 After you edit notes, run `python3 tools/brain.py flush -m "what changed"`. It re-ingests only changed files, runs verify, refuses to commit on RED, then commits and pushes. If nothing changed, it does nothing.
 
 ## Results
 
-Generated by `python3 tools/bench.py`. Don't edit by hand.
+Generated by `python3 tools/bench.py` on the test fixture in `tests/fixtures/vault/`. Don't edit by hand. [Published results dashboard (coming soon)](#results)
 
 <!-- BENCH:START -->
-Public set: 28 answerable + 3 no-answer questions (`evals/public_set.yaml`).
+Public set: 28 answerable + 3 no-answer questions (`tests/fixtures/vault/evals/public_set.yaml`, a fictional test fixture).
 
 | System | Hit@1 | Hit@5 | MRR | No-answer correct |
 |---|---:|---:|---:|---:|
