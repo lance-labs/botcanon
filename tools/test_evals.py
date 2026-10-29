@@ -170,7 +170,11 @@ def main() -> int:
         note.write_text(orig)
         b("ingest")
         tests.write_text(keep)
-        print(r.stdout.strip().splitlines()[-4] if r.stdout.strip() else "", file=sys.stderr)
+        # Info only: these tests are auto-generated from fixture notes with REWRITE: queries filled by the bare note
+        # title (the README "Your first run" scenario), so several are expected to fail. Not graded here.
+        m0 = re.search(r"passed: (\d+)\s+failed: (\d+)", r.stdout)
+        if m0:
+            print(f"first-run fixture evals (title-only questions): {m0.group(1)} pass, {m0.group(2)} fail as expected", file=sys.stderr)
 
         # fix 4: an empty or unknown-key tests file is RED and nonzero; legacy `cases:` is read
         good = yaml.safe_load(tests.read_text())
