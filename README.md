@@ -58,6 +58,7 @@ Not promised: it does not judge whether a fact is true, does not summarize acros
 
 ## Getting started (no coding background)
 
+Pick two bots: a Curator that keeps the memory ([docs/CURATOR-AGENT.md](docs/CURATOR-AGENT.md)), and an Evaluator that tests it ([docs/EVAL-AGENT.md](docs/EVAL-AGENT.md)). Both pages have a description you can paste.
 
 Setup times are estimates. The Windows steps are untested; reports welcome.
 
@@ -189,7 +190,7 @@ Notes on these numbers: [docs/HOW-IT-WORKS.md](docs/HOW-IT-WORKS.md#retrieval-re
 | `inbox/` | Proposals waiting for the curator. Never searched |
 | `skills/` | Agent instructions for promoting and retrieving |
 | `tools/` | `brain.py`, goldens, hooks |
-| `docs/` | How it works, the design essay, the eval agent, extending to other stores |
+| `docs/` | How it works, the design essay, the curator and eval agents, extending to other stores |
 
 ## MCP server
 
@@ -202,6 +203,7 @@ Notes on these numbers: [docs/HOW-IT-WORKS.md](docs/HOW-IT-WORKS.md#retrieval-re
 
 ## Going further
 
+- [docs/CURATOR-AGENT.md](docs/CURATOR-AGENT.md): a ready-to-paste description for the one bot that writes canon.
 - [docs/EVAL-AGENT.md](docs/EVAL-AGENT.md): a second agent keeps hidden test questions, so the curator can't grade itself. Recommended once you rely on the brain.
 - [docs/EXTENDING.md](docs/EXTENDING.md): search a novel or a codebase's docs with the same engine, as a separate store.
 

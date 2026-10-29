@@ -1,5 +1,7 @@
 # BotCanon: an independent eval agent (recommended)
 
+This is the tester that pairs with the curator ([docs/CURATOR-AGENT.md](CURATOR-AGENT.md)).
+
 The curator writes the notes and the goldens. If it also grades itself, it tends to test what it already knows how to find, and its goldens drift toward its own phrasing. A score from those goldens measures memory, not retrieval. A separate agent with its own storage keeps a hidden question set that the curator never sees and runs it on a schedule.
 
 Setup:
