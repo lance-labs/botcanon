@@ -182,8 +182,8 @@ Notes on these numbers: [docs/HOW-IT-WORKS.md](docs/HOW-IT-WORKS.md#retrieval-re
 
 | Path | What lives there |
 |---|---|
-| `decisions/` | One file per decision: `- Date:`, `- Owner:`, `- Decision:`, optional `- Prior:`, `- Revisit:` |
-| `people/`, `projects/` | One note per person or project |
+| `decisions/` | One file per decision: `- Status: approved`, `- Date:`, `- Owner:`, `- Decision:`, optional `- Prior:`, `- Revisit:`. A replaced decision gets `- Status: superseded` |
+| `people/`, `projects/` | One note per person or project, each with `- Status: approved` under its title |
 | `GOALS.md` | Goals and house rules |
 | `CURRENT.md` | Derived dashboard; it ranks below its sources |
 | `log/*.jsonl` | Append-only claims (`id`, `ts`, `entity`, `text`, `successor`). Read by compile, never searched |

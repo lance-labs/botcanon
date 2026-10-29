@@ -49,11 +49,12 @@ def status_check(vault: Path, canon: list[Path], superseded: set[str]) -> tuple[
         rel = p.relative_to(vault).as_posix()
         st = read_status(p.read_text(encoding="utf-8", errors="replace"))
         if st not in VALID:
-            errs.append(f"{rel}: missing or invalid status ({st})")
+            errs.append(f"{rel}: missing or invalid status ({st}); add '- Status: approved' under the title, or run tools/migrate_status.py")
         elif st == "proposed":
             errs.append(f"{rel}: canon note cannot be proposed")
         elif (st == "superseded") != (rel in superseded):
-            errs.append(f"{rel}: status {st} but Prior: lines say {'superseded' if rel in superseded else 'current'}")
+            errs.append(f"{rel}: status {st} but Prior: lines say {'superseded' if rel in superseded else 'current'}; "
+                        f"set '- Status: {'superseded' if rel in superseded else 'approved'}' or run tools/migrate_status.py")
     return not errs, errs
 
 

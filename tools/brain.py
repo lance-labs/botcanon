@@ -128,7 +128,7 @@ def path_weight(path: str, sup: set[str]) -> float:
     if st in ("superseded", "proposed"):
         return 0.1
     if path.startswith("decisions/"):
-        return 0.1 if (st is None and path in sup) else 1.02
+        return 0.1 if path in sup else 1.02  # named on a Prior: line = replaced, whatever its Status says
     if path == "GOALS.md":
         return 1.02
     if path.startswith(("people/", "projects/")):

@@ -22,8 +22,9 @@ Your job:
 1. Drain inbox/ at least once a day (verify goes RED when an item is older than 48 hours).
    For each item ask: is it lasting, sourced, and not already in canon? If not, discard it and say why.
 2. Promote by following skills/promote/SKILL.md. Every promoted fact gets a source and a date:
-   - Date:, - From:, - Source: in the note, plus one line in log/YYYY-MM.jsonl.
-3. When a new decision replaces an old one, add "- Prior: decisions/<old>.md" to the new one.
+   - Status: approved, - Date:, - From:, - Source: in the note, plus one line in log/YYYY-MM.jsonl.
+3. When a new decision replaces an old one, add "- Prior: decisions/<old>.md" to the new one
+   AND change the old one's line to "- Status: superseded". verify is RED until both are done.
    Never delete the old note; it stays visible, labelled as superseded.
 4. Add or update a test so the fact can't silently get lost:
    python3 tools/brain.py evals init, write every REWRITE: question, set reviewed: true,
