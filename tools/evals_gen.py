@@ -3,7 +3,7 @@
 init  reads every canon note, picks its most fact-like lines, and writes evals/proposed_tests.yaml:
       one question per line (expected note + the quoted line it should come from), plus a few
       off-topic "I don't know" questions. Nothing is trusted until you review it.
-accept merges the reviewed file into the store's retrieval tests and removes the proposal.
+accept refuses REWRITE: placeholders and tests not marked reviewed: true, then merges the reviewed file into the store's retrieval tests and removes the proposal.
 """
 from __future__ import annotations
 
@@ -49,58 +49,122 @@ def _candidates(text: str) -> list[tuple[float, int, str, str | None]]:
     return sorted(out, key=lambda c: (-c[0], c[1]))
 
 
-def _question(title: str, line: str, key: str | None) -> str:
-    title = re.sub(r"^(decision|project|person)\s*:\s*", "", title, flags=re.I)
-    if key and key.lower() != "decision":
-        return f"what is our current {key.lower()}" if title.lower() in ("current", "goals") else f"what is the {key.lower()} for {title}"
-    body = KV_RE.match(line).group(2) if key else line.lstrip("-* ")
-    top = [w for w in dict.fromkeys(_words(body)) if w not in _words(title)][:3]
-    return f"{title}: {' '.join(top)}".strip()
+COMMENT_KEYS = {"note", "notes", "aside", "comment", "comments", "todo", "see also", "bar fit"}
+KEY_QUESTIONS = {  # common field names mapped to questions people actually ask
+    "why": "why did we decide {t}", "rationale": "why did we decide {t}", "reason": "why did we decide {t}",
+    "last": "when was the last contact with {t}", "last contact": "when was the last contact with {t}",
+    "primary": "what is the primary source for {t}", "role": "what is the role of {t}",
+    "contact": "how do we contact {t}", "meeting": "when is the meeting for {t}",
+}
+DERIVED = {"CURRENT.md"}  # dashboards rank below their sources by design; never a test target
+REWRITE = "REWRITE:"
 
 
-def evals_init(per_note: int = 2) -> str:
-    notes = [p for p in brain.canon_files() if STUB_MARK not in p.read_text()]
+def clean_title(title: str) -> str:
+    t = re.sub(r"^(decision|project|person)\s*:\s*", "", title, flags=re.I)
+    t = re.sub(r"\([^)]*\)", "", t)
+    t = brain.ISO_RE.sub("", t)
+    return re.sub(r"\s+", " ", t).strip(" -:,;\u2014\u2013")
+
+
+def _question(title: str, line: str, key: str | None, rel: str, n: int) -> str:
+    """A question that names the topic but not the answer; otherwise a REWRITE placeholder for a human."""
+    t = clean_title(title)
+    k = (key or "").lower()
+    if k and k != "decision" and t:
+        q = KEY_QUESTIONS.get(k, "what is the {k} for {t}").format(k=k, t=t)
+        if t.lower() in ("current", "goals"):
+            q = f"what is our current {k}"
+        return q  # template + topic only: the answer line's own words never enter the query
+    return f"{REWRITE} ask, in your own words, the question that {rel} line {n} answers"
+
+
+def _boilerplate(per_note: dict[str, list[tuple]]) -> set[tuple[str, ...]]:
+    """Line openings that repeat across 3+ notes: stock sentences that test nothing note-specific."""
+    seen: dict[tuple[str, ...], set[str]] = {}
+    for rel, cands in per_note.items():
+        for _s, _n, line, key in cands:
+            body = KV_RE.match(line).group(2) if key else line
+            seen.setdefault(tuple(_words(body)[:5]), set()).add(rel)
+    return {k for k, v in seen.items() if len(v) >= 3}
+
+
+def _targets() -> list[Path]:
+    sup = brain.superseded()
+    out = []
+    for p in brain.canon_files():
+        text = p.read_text()
+        rel = brain.rel(p)
+        if STUB_MARK in text or p.name in DERIVED or rel in sup or brain.read_status(text) == "superseded":
+            continue
+        out.append(p)
+    return out
+
+
+def evals_init(per_note: int = 2, quotes: bool = False) -> tuple[str, int]:
+    notes = _targets()
     if not notes:
-        return "evals init: no notes yet. Add a few notes to decisions/, people/ or projects/, then run it again."
-    goldens, seen = [], set()
+        return "evals init: no notes yet. Add a few notes to decisions/, people/ or projects/, then run it again.", 0
+    cands = {brain.rel(p): [c for c in _candidates(p.read_text()) if not (c[3] and c[3].lower() in COMMENT_KEYS)] for p in notes}
+    stock = _boilerplate(cands)
+    goldens, seen, n_rewrite = [], set(), 0
     for p in notes:
         text = p.read_text()
         rel = brain.rel(p)
         title = brain.note_title(text, p)
-        for _score, n, line, key in _candidates(text)[:per_note]:
-            q = _question(title, line, key)
+        picked = [c for c in cands[rel] if tuple(_words(KV_RE.match(c[2]).group(2) if c[3] else c[2])[:5]) not in stock]
+        for _score, n, line, key in picked[:per_note]:
+            q = _question(title, line, key, rel, n)
             if q.lower() in seen:
                 continue
             seen.add(q.lower())
+            n_rewrite += q.startswith(REWRITE)
             slug = re.sub(r"[^a-z0-9]+", "-", f"{Path(rel).stem}-{n}".lower()).strip("-")
-            goldens.append({"id": slug, "query": q, "expect_path": rel, "max_rank": 3, "quote": f"{rel}:{n} {line}"})
+            g = {"id": slug, "query": q, "expect_path": rel, "max_rank": 3, "source": f"{rel}:{n}", "reviewed": False}
+            if quotes:
+                g["quote"] = line
+            goldens.append(g)
     for q in IDK_QUESTIONS:
-        goldens.append({"id": "idk-" + re.sub(r"[^a-z0-9]+", "-", q.lower()).strip("-"), "query": q, "expect_known": False})
+        goldens.append({"id": "idk-" + re.sub(r"[^a-z0-9]+", "-", q.lower()).strip("-"), "query": q,
+                        "expect_known": False, "reviewed": False})
     out = brain.VAULT / "evals" / "proposed_tests.yaml"
     out.parent.mkdir(parents=True, exist_ok=True)
-    header = ("# PROPOSED tests from `brain.py evals init`. Review before accepting:\n"
-              "#  - reword each query the way you or your bots would actually ask it (keep the meaning);\n"
-              "#  - delete any test whose quoted line isn't a fact worth remembering;\n"
-              "#  - never change expect_path to whatever search returns today; that hides misses.\n"
-              "# Then run: python3 tools/brain.py evals accept\n")
+    header = ("# PROPOSED tests from `brain.py evals init`. This file is gitignored; it is never committed.\n"
+              "# For each test:\n"
+              "#  - if the query starts with REWRITE:, open the source line and write the question you would ask;\n"
+              "#  - reword any other query the way you or your bots would actually ask it (don't copy the answer's words);\n"
+              "#  - delete tests whose line isn't a fact worth remembering;\n"
+              "#  - never change expect_path to whatever search returns today; that hides misses;\n"
+              "#  - then set reviewed: true.\n"
+              "# Then run: python3 tools/brain.py evals accept   (or --all-reviewed once you've checked every test)\n")
     out.write_text(header + yaml.safe_dump({"recall_at_5_floor": brain.RECALL5_FLOOR, "goldens": goldens},
                                            sort_keys=False, allow_unicode=True, width=200))
     n_idk = len(IDK_QUESTIONS)
-    return f"evals init: wrote {brain.rel(out)} ({len(goldens) - n_idk} answerable from {len(notes)} notes, {n_idk} I-don't-know). Review it, then run: evals accept"
+    return (f"evals init: wrote {brain.rel(out)} ({len(goldens) - n_idk} answerable from {len(notes)} notes, "
+            f"{n_rewrite} need a question written, {n_idk} I-don't-know). Review it, then run: evals accept"), 0
 
 
-def evals_accept() -> str:
+def evals_accept(all_reviewed: bool = False) -> tuple[str, int]:
     prop = brain.VAULT / "evals" / "proposed_tests.yaml"
     if not prop.is_file():
-        return "evals accept: nothing to accept; run evals init first"
-    new = yaml.safe_load(prop.read_text()) or {}
+        return "evals accept: nothing to accept; run evals init first", 1
+    new = (yaml.safe_load(prop.read_text()) or {}).get("goldens") or []
+    rewrite = [g["id"] for g in new if str(g.get("query", "")).startswith(REWRITE)]
+    if rewrite:
+        return (f"evals accept: refused. {len(rewrite)} test(s) still have a REWRITE: placeholder query "
+                f"(first: {rewrite[0]}). Write the question or delete the test."), 1
+    unreviewed = [g["id"] for g in new if g.get("reviewed") is not True]
+    if unreviewed and not all_reviewed:
+        return (f"evals accept: refused. {len(unreviewed)} of {len(new)} test(s) are not marked reviewed: true "
+                f"(first: {unreviewed[0]}). Review them, or pass --all-reviewed to confirm you checked every one."), 1
     target = brain.TESTS
-    cur = yaml.safe_load(target.read_text()) if target.is_file() else {"recall_at_5_floor": new.get("recall_at_5_floor", brain.RECALL5_FLOOR), "goldens": []}
-    have = {g["id"] for g in cur.get("goldens") or []}
-    added = [g for g in new.get("goldens") or [] if g["id"] not in have]
-    cur["goldens"] = (cur.get("goldens") or []) + added
+    cur = (yaml.safe_load(target.read_text()) if target.is_file() else None) or {"recall_at_5_floor": brain.RECALL5_FLOOR}
+    key = "cases" if "cases" in cur else "goldens"
+    have = {g["id"] for g in cur.get(key) or []}
+    added = [{k: v for k, v in g.items() if k != "reviewed"} for g in new if g["id"] not in have]
+    cur[key] = (cur.get(key) or []) + added
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text("# Retrieval tests for this store (accepted from evals init; edit freely).\n"
                       + yaml.safe_dump(cur, sort_keys=False, allow_unicode=True, width=200))
     prop.unlink()
-    return f"evals accept: added {len(added)} tests to {brain.rel(target) if target.is_relative_to(brain.VAULT) else target} ({len(cur['goldens'])} total). Run verify."
+    return f"evals accept: added {len(added)} tests to {brain.rel(target) if target.is_relative_to(brain.VAULT) else target} ({len(cur[key])} total). Run verify.", 0

@@ -80,7 +80,7 @@ Setup times are estimates. The Windows steps are untested; reports welcome.
    ```
    On a fresh copy the last lines say `evals: none yet` and `verify: YELLOW`. That is expected: there are no notes or tests yet. The first run downloads a small search model (not data), so it takes a minute.
 9. **Add your notes.** Write a few short notes in `decisions/`, `people/` and `projects/` (one fact per line; see [How it works](#how-it-works)), and replace the stub in `GOALS.md`.
-10. **Build your own tests:** `python3 tools/brain.py evals init`. It reads your notes and writes `evals/proposed_tests.yaml`: one question per fact-like line, each with the note it should find and the quoted line, plus a few off-topic questions that must get "I don't know". Reword the questions the way you'd really ask them, delete weak ones, then run `python3 tools/brain.py evals accept`. Never change an expected note just to make a test pass.
+10. **Build your own tests:** `python3 tools/brain.py evals init`. It reads your current notes (skipping replaced ones and `CURRENT.md`) and writes `evals/proposed_tests.yaml`, which is never committed. Each test names the note it should find and the line (`source: path:line`). Where a fact has a clear field (Role, Why, Last contact), you get a ready question; otherwise the query says `REWRITE:` and you write the question you'd really ask, without copying the answer's words. Delete weak tests, set `reviewed: true` on each one you keep, then run `python3 tools/brain.py evals accept` (it refuses `REWRITE:` placeholders and unreviewed tests; `--all-reviewed` confirms you checked them all). Never change an expected note just to make a test pass. Add `--quotes` to `init` only if you want the answer line copied into the test file.
 11. **Save it:** `python3 tools/brain.py flush -m "my first notes"`. It re-indexes, runs your tests, and commits only if nothing is RED; verify should now say `GREEN`. GitHub Desktop shows the change, and you can see it on github.com.
 12. **Ask it something:** `python3 tools/brain.py answer "<a question your notes answer>"`. It quotes the line, or says "I don't know".
 
@@ -142,7 +142,7 @@ tools/install-hooks.sh                   # needs gitleaks on PATH (see Secret sc
 python3 tools/brain.py ingest
 python3 tools/brain.py verify            # empty vault: YELLOW, "no evals yet; run evals init"
 python3 tools/brain.py evals init        # after adding notes: propose tests from them
-python3 tools/brain.py evals accept      # after reviewing evals/proposed_tests.yaml
+python3 tools/brain.py evals accept      # after reviewing evals/proposed_tests.yaml and marking tests reviewed: true
 ```
 
 More commands:

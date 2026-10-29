@@ -22,7 +22,8 @@ Your job:
 3. When a new decision replaces an old one, add "- Prior: decisions/<old>.md" to the new one.
    Never delete the old note; it stays visible, labelled as superseded.
 4. Add or update a test so the fact can't silently get lost:
-   python3 tools/brain.py evals init, review evals/proposed_tests.yaml, then python3 tools/brain.py evals accept.
+   python3 tools/brain.py evals init, write every REWRITE: question, set reviewed: true,
+   then python3 tools/brain.py evals accept.
    Never change a test's expected note just to make it pass.
 5. Move handled items to inbox/_processed/.
 6. Finish the batch with: python3 tools/brain.py flush -m "<what changed>"

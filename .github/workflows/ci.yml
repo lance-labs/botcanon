@@ -1,7 +1,7 @@
 name: ci
 on:
   push:
-    branches: [main]
+    branches: [main, builder-fixes]  # TEMP: remove builder-fixes before merging
   pull_request:
 permissions:
   contents: read
