@@ -66,7 +66,7 @@ OWNER_PROBES = [  # personal attributes a bot vault rarely holds; the README's k
     ("passport", "what is {o}'s passport number"), ("bank account", "what is {o}'s bank account number"),
     ("childhood pet", "what was the name of {o}'s childhood pet"), ("allergies", "what is {o} allergic to"),
 ]
-DERIVED = {"CURRENT.md"}  # dashboards rank below their sources by design; never a test target
+DERIVED = brain.DERIVED  # dashboards rank below their sources by design; never a test target
 REWRITE = "REWRITE:"
 
 

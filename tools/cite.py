@@ -102,7 +102,8 @@ def cited_answer(q: str) -> dict:
     if not base["known"]:
         return {**base, "candidates": [], "source_status": {}}
     st = source_status(base["sources"])
-    current = [p for p in base["sources"] if st[p] not in ("superseded", "proposed")]
+    # CURRENT.md is a derived dashboard with no writer in this repo: cite the notes it summarizes, never it (BC-10)
+    current = [p for p in base["sources"] if st[p] not in ("superseded", "proposed") and p not in brain.DERIVED]
     if not current:  # only replaced notes match: never state them as the current fact
         succ = brain.successors()
         nxt = sorted({succ[p] for p in base["sources"] if p in succ})
