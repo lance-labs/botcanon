@@ -81,7 +81,7 @@ Decisions and goals edge out people and projects as a tie-breaker. The dashboard
 
 ## Freshness, flush, verify, CI
 
-- **RED** (verify fails): a canon note is newer than the index, the store was never indexed, or an inbox item is older than 48 h.
+- **RED** (verify fails): a canon note is newer than the index, the store was never indexed. (An inbox item older than 48 h is YELLOW: a reminder that does not block saves.)
 - **YELLOW** (warning): a decision is past its `Revisit:` date.
 - **`flush`** = ingest, then verify, then commit (memory paths only); `--push` also pushes, and is refused when GitHub reports the repo public. Write canon only through it. **`verify`** runs every golden question in the store's tests (`evals/retrieval_tests.yaml`, built with `evals init` / `evals accept`; with none yet, verify says so and stays YELLOW) and requires recall@5 ≥ 0.9, freshness not RED, and the built-in checks to pass (status, supersession, freshness fixtures).
 - **Tests file rules.** The top-level keys are `recall_at_5_floor` and `goldens:` (`cases:` is accepted as the older name). A tests file with 0 tests or any other top-level key makes verify RED and exit nonzero, so a typo can't turn into a silent pass. `expect_path` may be one note or a list of notes; with a list, the test passes when any of them is within `max_rank`. `answer` quotes only current notes: a superseded or proposed source is listed with its status and never quoted, and if only replaced notes match the answer is "I don't know" plus the successor's path. Answer-level tests use `expect_known: true|false` and run cite-and-verify, the path a bot actually gets; add `expect_cite: path:line` to require the quote to come from that exact line. The fixture has 5 such answers and 3 "I don't know" cases, so CI fails if `answer` quotes the wrong line.
@@ -103,7 +103,8 @@ The test fixture (`tests/fixtures/vault/`, fictional, CI and bench only) is tiny
 - **Authority:** decisions and GOALS win ties (+2%) over people and projects. A decision named on a newer decision's `- Prior:` line sinks to 0.1. The weights break ties; they do not override relevance.
 - **Compile:** for an entity, CURRENT is the newest non-superseded decision plus log claims dated after it. Older claims move to OUTRANKED, and claims with a `successor` move to SUPERSEDED.
 - **Freshness:**
-  - RED: a note is newer than the index, or an inbox item is older than 48 hours.
+  - RED: a note is newer than the index.
+  - YELLOW: an inbox item is older than 48 hours (by its `date:` line).
   - YELLOW: a decision is past its `Revisit: ~YYYY-MM-DD` date.
   - `Revisit: standing (no review date)` never comes due.
 - **Verify:** runs every golden (expected path within a rank, rejected paths, no-answer cases) and enforces a recall@5 floor. It also runs the authority and freshness fixtures and checks that the git hooks are installed.

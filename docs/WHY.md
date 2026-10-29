@@ -25,7 +25,8 @@ A retriever that always returns its top five will always produce an answer, whic
 ## Staleness has to be loud
 
 The worst failure of a memory system is quiet staleness: the index stops updating and nobody notices for weeks. Freshness is part of `verify`:
-- RED: a note is newer than the index, or a proposal has waited more than 48 hours.
+- RED: a note is newer than the index.
+- YELLOW: a proposal has waited more than 48 hours.
 - YELLOW: a decision is past its revisit date.
 
 `flush` runs on every write batch and refuses to commit on RED, so freshness never depends on a scheduled job staying alive.
