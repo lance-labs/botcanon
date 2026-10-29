@@ -99,6 +99,7 @@ Setup times are estimates. The Windows steps are untested; reports welcome.
    python3 tools/brain.py ingest
    python3 tools/brain.py verify
    ```
+   If you use the terminal without GitHub Desktop and `git config user.email` prints nothing, set your name and email once (`git config --global user.name "Your Name"` and `git config --global user.email "you@example.com"`), or `flush` cannot commit.
    On a fresh copy the last lines say `evals: none yet` and `verify: YELLOW`. That is expected: there are no notes or tests yet. The first run downloads a small search model (not data), so it takes a minute.
 9. **Add your notes.** Write a few short notes in `decisions/`, `people/` and `projects/` (one fact per line; see [How it works](#how-it-works)), and replace the stub in `GOALS.md`.
 10. **Build your own tests:** `python3 tools/brain.py evals init`. It reads your current notes (skipping replaced ones and `CURRENT.md`) and writes `evals/proposed_tests.yaml`, which is never committed. Each test names the note it should find and the line that holds the answer (`expect_quote:`, its text, with `source: path:line` as a hint). `verify` fails a test unless search finds the note **and** the bot's answer quotes a line in that note with that text. Line numbers can move as you edit; only the text matters. See [Your first run](#your-first-run). Where a fact has a clear field (Role, Why, Last contact), you get a ready question; otherwise the query says `REWRITE:` and you write the question you'd really ask, without copying the answer's words. Delete weak tests, set `reviewed: true` on each one you keep, then run `python3 tools/brain.py evals accept` (it refuses `REWRITE:` placeholders and unreviewed tests; `--all-reviewed` confirms you checked them all). Never change an expected note just to make a test pass. Add `--owner "<your name>"` to `init` to also test questions about you that the notes can't answer (the weak spot under Known limits). Add `--quotes` to `init` only if you want the answer line copied into the test file.
@@ -188,6 +189,7 @@ Put these in every agent's boot instructions. The numbers come from the author's
 git clone https://github.com/rsj2h4sr86-creator/botcanon.git my-brain && cd my-brain
 python3 -m venv .venv && . .venv/bin/activate
 pip install -r requirements.txt          # fastembed downloads BAAI/bge-small-en-v1.5 on first use
+git config user.email >/dev/null || git config user.name "Your Name"; git config user.email >/dev/null || git config user.email "you@example.com"   # flush commits need a git identity
 tools/install-hooks.sh                   # needs gitleaks on PATH (see Secret scanning)
 python3 tools/brain.py ingest
 python3 tools/brain.py verify            # empty vault: YELLOW, "no evals yet; run evals init"

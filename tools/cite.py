@@ -367,6 +367,12 @@ def _cited_answer(q: str) -> dict:
     if missing and not (cands and states_unseen(q, cands[0])):
         return {"known": False, "answer": f"I don't know: the vault never mentions {', '.join(missing)}.",
                 "sources": base["sources"], "source_status": st, "candidates": cands}
+    # A why-question that matches a note strongly is answered by that note's own "- Why:" line, if it has one
+    if re.match(r"^\s*why\b", q, re.I) and cands and cands[0]["coverage"] >= SPAN_COVER:
+        w = next((c for c in cands if c["path"] == cands[0]["path"] and re.match(r"^[-*]?\s*Why\s*:", c["quote"], re.I)), None)
+        if w and not check_line(q, w):
+            return {"known": True, "answer": w["quote"], "sources": base["sources"], "source_status": st, "candidates": cands,
+                    "citation": f'{w["path"]}:{w["line"]} "{w["quote"]}"'}
     if cands and cands[0]["coverage"] < SPAN_COVER and top_note_ok(q, cands[0], current[0]) and not check_line(q, cands[0]):
         c = cands[0]
         return {"known": True, "answer": c["quote"], "sources": base["sources"], "source_status": st, "candidates": cands,

@@ -51,7 +51,7 @@ def _candidates(text: str) -> list[tuple[float, int, str, str | None]]:
 
 COMMENT_KEYS = {"note", "notes", "aside", "comment", "comments", "todo", "see also", "bar fit"}
 KEY_QUESTIONS = {  # common field names mapped to questions people actually ask
-    "why": "why did we decide {t}", "rationale": "why did we decide {t}", "reason": "why did we decide {t}",
+    "why": "why {t}", "rationale": "why {t}", "reason": "why {t}",
     "last": "when was the last contact with {t}", "last contact": "when was the last contact with {t}",
     "primary": "what is the primary source for {t}", "role": "what is the role of {t}",
     "contact": "how do we contact {t}", "meeting": "when is the meeting for {t}",
