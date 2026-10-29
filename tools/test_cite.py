@@ -34,6 +34,9 @@ with tempfile.TemporaryDirectory() as td:
     shutil.copytree(ROOT / "tests" / "fixtures" / "vault", v)
     run(v, "ingest")
     known, q = answer(v, "what are the opening hours")
+    for ask in ("bakery closes Mondays", "opening hours"):  # BC-17: the real leak property, at answer level
+        _, lq = answer(v, ask)
+        check(f"never cites log/ or inbox/: {ask}", "log/" not in lq and "inbox/" not in lq, lq)
     check("opening hours quotes the Decision line", known and "2026-03-01-opening-hours.md:8" in q and "Decision:" in q, q)
     for ask in ("what are the opening hours", "when does the bakery open", "how much is a sourdough loaf"):
         _, q = answer(v, ask)

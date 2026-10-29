@@ -15,8 +15,7 @@ goldens:
   - {id: pricing, query: "how much is a sourdough loaf", expect_path: decisions/2026-02-01-pricing.md, max_rank: 3}
   - {id: food-cost-goal, query: "food cost target", expect_path: GOALS.md, max_rank: 3}
   - {id: who-writes, query: "who is allowed to write canon notes", expect_path: GOALS.md, max_rank: 3}
-  - {id: neg-no-log-leak, query: "bakery closes Mondays", reject_path: log/}
-  - {id: neg-no-inbox, query: "opening hours", reject_path: inbox/}
+  # log/ and inbox/ are never indexed, so a reject_path on them could never fail; answer-level checks below cover leaks.
   - {id: none-nonsense, mode: lexical, query: "zxqv blorptastic", expect_empty: true}
   - {id: none-semantic, mode: semantic, query: "quantum chromodynamics lattice gauge theory", expect_empty: true}
   # Answer level: cite-and-verify must quote the line that states the fact (expect_cite = path:line), or say "I don't know".
