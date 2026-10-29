@@ -90,7 +90,7 @@ def main() -> int:
             errs.append("an unknown field name should give a REWRITE: placeholder, not a template")
 
         # owner probes: --owner adds 'I don't know' tests about the owner, skipping topics the notes mention
-        (v / "people" / "dana-okafor.md").write_text((v / "people" / "dana-okafor.md").read_text() + "\n- Dentist: Dr. Example, Main St.\n")
+        (v / "people" / "dana-okafor.md").write_text((v / "people" / "dana-okafor.md").read_text() + "\n- Dentist: Dr. Example, Main St.\n- Carpet replaced; petty cash checked.\n")
         b("evals", "init", "--owner", "Dana Okafor")
         ids = {t["id"]: t for t in yaml.safe_load(prop.read_text())["goldens"]}
         probes = [t for i, t in ids.items() if i.startswith("idk-owner-")]
@@ -98,6 +98,8 @@ def main() -> int:
             errs.append(f"--owner should add owner 'I don't know' probes: {sorted(ids)}")
         if "idk-owner-dentist" in ids:
             errs.append("a probe whose topic the notes mention (dentist) must be skipped")
+        if "idk-owner-childhood-pet" not in ids:
+            errs.append("'carpet'/'petty' must not count as the topic word 'pet' (whole words only)")
         g("checkout", "-q", "--", "people/dana-okafor.md")
 
         # fix 5: --quotes opt-in copies the exact line
