@@ -6,6 +6,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 
 ## [Unreleased]
 ### Fixed
+- Claims match the repo (BC-14): WHY.md no longer says "one Python file" and notes the first-run model download; the old CHANGELOG CI path is annotated; `bench.py --root <your store>` no longer rewrites the repo README table (it only ever shows the test fixture).
 - Two proposals filed in the same second with the same opening words no longer overwrite each other (BC-13); the second gets a `-2` suffix. Tested in `test_cite.py`.
 - An old inbox item no longer blocks every save (BC-12): it makes freshness YELLOW (a reminder), not RED, and its age comes from the proposal's `date:` line, which survives a clone, instead of file mtime.
 - Owner "I don't know" probes are skipped only when a topic word appears as a whole word in the notes (BC-11); "carpet" no longer removes the pet probe. Tested in `test_evals.py`.
@@ -79,7 +80,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 ### Added
 - "The problem" section at the top of the README.
 - 10 paraphrase questions in `evals/public_set.yaml` (indirect, plain English). Bench: hybrid Hit@1 0.75 / MRR 0.84 vs lexical 0.68 / 0.73.
-- GitHub Actions CI workflow at `ci/github-actions.yml` (copy into `.github/workflows/` to enable): gitleaks history scan, hooks, ingest, verify, MCP end-to-end, and a check that the README bench table matches the code.
+- GitHub Actions CI workflow (then at `ci/github-actions.yml`; now `.github/workflows/ci.yml`, enabled): gitleaks history scan, hooks, ingest, verify, MCP end-to-end, and a check that the README bench table matches the code.
 - This changelog and version tags.
 
 ## [0.1.0] - 2026-10-28

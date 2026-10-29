@@ -91,7 +91,10 @@ def main() -> int:
     t = table({name: score(fn, qs) for name, fn in SYSTEMS.items()})
     print(t)
     readme = brain.TOOLS.parent / "README.md"  # the repo README, whichever store was scored
-    if not a.no_readme and readme.exists():
+    fixture = brain.VAULT.resolve() == brain.FIXTURE_VAULT.resolve()
+    if not fixture and not a.no_readme:
+        print("(your store: README table left alone; it only ever shows the test fixture)")
+    if fixture and not a.no_readme and readme.exists():
         s = readme.read_text()
         new = re.sub(r"(<!-- BENCH:START -->\n).*?(<!-- BENCH:END -->)", lambda m: m.group(1) + t + "\n" + m.group(2), s, flags=re.S)
         readme.write_text(new)

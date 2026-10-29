@@ -37,7 +37,7 @@ Your vault starts empty: a skeleton of folders and a `GOALS.md` stub. Nothing to
 
 - **One memory for all your assistants.** Notes are plain Markdown in git, so every agent, and you, read the same record. Nothing lives only in one chat.
 - **Answers you can check.** `answer` returns `file:line "quote"` and confirms the line is really in the file. In the author's vault, with agents following the [Agent rules](#agent-rules), made-up answers on a held-out set of 22 off-topic questions went from 22 to 0, while 1 of 10 real questions got a wrong "I don't know".
-- **Better search than plain embeddings, measured.** On the public test set (a small fictional fixture in `tests/fixtures/`, used only by CI and the bench): top-result hit rate 0.79 vs 0.75 for plain embeddings, and no-answer questions handled correctly 3 of 3 vs 0 of 3. It's a small set; run `bench.py` on yours.
+- **Better search than plain embeddings, measured.** On the public test set (a small fictional fixture in `tests/fixtures/`, used only by CI and the bench): top-result hit rate 0.79 vs 0.75 for plain embeddings (one more right answer out of 28), and no-answer questions handled correctly 3 of 3 vs 0 of 3 (plain embeddings always return something, so they can't score there). It's a small smoke-test set, not proof of quality; check your own vault with `verify`.
 - **You stay in charge.** Agents can only propose to `inbox/`. You, or one curator agent, decide what becomes a fact, and the log keeps who said what, and when.
 - **It tells you when it breaks.** `verify` runs your test questions on every change and refuses to save if search got worse or the index is stale.
 - **Private and free to run.** Everything runs locally: SQLite and a small model, with no server and no API key.
