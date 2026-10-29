@@ -1,6 +1,4 @@
-# second-brain-starter
-
-> Working name; a rename is under discussion.
+# BotCanon
 
 **Memory for your AI bots (Grok Bots first).** Instead of rereading long chat histories, your bots look up short, quoted facts from a set of notes you control, and say "I don't know" when the notes don't say.
 
@@ -65,7 +63,7 @@ Setup times are estimates. The Windows steps are untested; reports welcome.
 
 1. **Make a GitHub account.** Go to https://github.com/signup and follow the steps. The free plan is enough.
 2. **Install GitHub Desktop** from https://desktop.github.com/ and sign in with that account.
-3. **Get your own copy of this repo.** Open https://github.com/rsj2h4sr86-creator/second-brain-starter, click **Use this template**, then **Create a new repository**. Name it `my-brain` and choose **Private**.
+3. **Get your own copy of this repo.** Open https://github.com/rsj2h4sr86-creator/botcanon (pending the repo rename), click **Use this template**, then **Create a new repository**. Name it `my-brain` and choose **Private**.
 4. **Clone it to your computer.** In GitHub Desktop, choose **File → Clone repository**, pick `my-brain`, choose a folder, then click **Clone**.
 5. **Install Python** 3.10 or newer from https://www.python.org/downloads/. On Windows, tick **Add python.exe to PATH** in the installer.
 6. **Install gitleaks.** Mac: `brew install gitleaks`. Windows or Linux: download the release for your system from https://github.com/gitleaks/gitleaks/releases and put it on your PATH.
@@ -134,7 +132,7 @@ Put these in every agent's boot instructions. The numbers come from the author's
 ## Quickstart (terminal)
 
 ```sh
-git clone https://github.com/rsj2h4sr86-creator/second-brain-starter.git my-brain && cd my-brain
+git clone https://github.com/rsj2h4sr86-creator/botcanon.git my-brain && cd my-brain   # URL pending the repo rename
 python3 -m venv .venv && . .venv/bin/activate
 pip install -r requirements.txt          # fastembed downloads BAAI/bge-small-en-v1.5 on first use
 tools/install-hooks.sh                   # needs gitleaks on PATH (see Secret scanning)

@@ -1,4 +1,4 @@
-# How it works (internals)
+# BotCanon: how it works (internals)
 
 Moved from README.md in v2. The README keeps the overview; this file keeps every detail.
 

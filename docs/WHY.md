@@ -1,4 +1,4 @@
-# Why this second brain looks the way it does
+# BotCanon: why it looks the way it does
 
 Most "memory for agents" projects begin with storage: a vector database, a graph, a summarizer that runs every night. This one begins with a different question: when an agent tells you something from memory, how would you know it is true, current, and still the rule? Every design choice here follows from wanting a good answer to that question.
 

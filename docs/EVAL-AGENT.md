@@ -1,4 +1,4 @@
-# Recommended: an independent eval agent
+# BotCanon: an independent eval agent (recommended)
 
 The curator writes the notes and the goldens. If it also grades itself, it tends to test what it already knows how to find, and its goldens drift toward its own phrasing. A score from those goldens measures memory, not retrieval. A separate agent with its own storage keeps a hidden question set that the curator never sees and runs it on a schedule.
 
