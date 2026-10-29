@@ -396,21 +396,43 @@ def propose(text: str, from_agent: str, source: str, vault: Path = None) -> Path
 
 # ---------------------------------------------------------------- compile
 
-def read_log(vault: Path) -> list[dict]:
+def read_log(vault: Path, errors: list | None = None) -> list[dict]:
+    """All log claims. A line that isn't a JSON object is skipped (and reported in `errors`),
+    so one bad line can't take down compile/why; verify fails on it."""
     claims = []
     for p in sorted((vault / "log").glob("*.jsonl")):
-        claims += [json.loads(l) for l in p.read_text().splitlines() if l.strip()]
+        for i, l in enumerate(p.read_text().splitlines(), 1):
+            if not l.strip():
+                continue
+            try:
+                c = json.loads(l)
+                if not isinstance(c, dict):
+                    raise ValueError("not an object")
+                claims.append(c)
+            except ValueError as e:
+                if errors is not None:
+                    errors.append(f"{rel(p, vault)}:{i}: {e}")
     return claims
 
 
+def _log_errors() -> list[str]:
+    errs: list[str] = []
+    read_log(VAULT, errs)
+    return errs
+
+
 def decision_for(vault: Path, entity: str) -> dict | None:
-    sup = superseded(vault)
-    for p in sorted((vault / "decisions").glob(f"*-{entity}.md"), reverse=True):
+    """The current decision for an entity: latest `- Date:` among notes that are not superseded
+    (by Prior: or by Status), not the last filename."""
+    sup, best = superseded(vault), None
+    for p in sorted((vault / "decisions").glob(f"*-{entity}.md")):
         r, t = rel(p, vault), p.read_text()
         d, dec = DATE_RE.search(t), DECISION_RE.search(t)
-        if r not in sup and d and dec:
-            return {"path": r, "date": d.group(1), "text": dec.group(1).strip()}
-    return None
+        if r in sup or read_status(t) in ("superseded", "proposed") or not (d and dec):
+            continue
+        if best is None or d.group(1) >= best["date"]:
+            best = {"path": r, "date": d.group(1), "text": dec.group(1).strip()}
+    return best
 
 
 def compile_entity(entity: str, vault: Path = None) -> dict:
@@ -610,6 +632,7 @@ def verify(as_json: bool = False) -> bool:
     fr = freshness(last_index_ts=meta(conn, "last_index_ts"))
     st_ok, st_errs = status_check(VAULT, canon_files(), superseded())
     checks = {"status_check": (st_ok, f"{len(canon_files())} canon notes" + ("" if st_ok else ": " + "; ".join(st_errs[:5]))),
+              "log": (lambda e: (not e, "all lines valid JSON" if not e else "bad line(s): " + "; ".join(e[:3])))(_log_errors()),
               "status_fixture": status_fixture(), "authority_fixture": authority_fixture(), "freshness_fixture": freshness_fixture(), "hooks": hooks_installed()}
     if VAULT == FIXTURE_VAULT:  # fixture-only feature checks; user stores skip this
         checks["feature_fixture"] = feature_fixture()
