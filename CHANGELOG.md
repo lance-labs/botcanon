@@ -5,6 +5,11 @@ BotCanon (repo slug `botcanon`; formerly second-brain-starter).
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follow [SemVer](https://semver.org/); retrieval-quality changes are noted with their bench numbers.
 
 ## [Unreleased]
+### Added
+- Fallback search, ported from the Lance vault engine (2026-10-29). (1) In the top-ranked note, a line at half coverage is accepted when its own words carry a question word and the cross-encoder scores (question, "title. line") at 3.0 or more. (2) When the top notes hold no stating line, every other current note is searched line by line (distinctive words verbatim, cross-encoder scored); superseded, proposed and derived notes are never searched. On a copy of a 42-note real vault, the held-out answerable set went from 5/10 to 6/10 right with 0 wrong; off-topic stayed 20/20 "I don't know"; probe-set answers unchanged. Search latency (cited answer, median/p90): test vault 174/369 ms before, 167/272 ms after; real-vault copy 650/1128 ms before, 637/982 ms after.
+### Fixed
+- A question word the vault never uses (e.g. "passport") must be stated by the quoted line, unless the line repeats another question word verbatim. "What is Dana Okafor's passport number" no longer quotes "Prefers phone."; regression test in `test_cite.py`.
+- `Prior:` lines written as prose ("- Prior: replaces `decisions/a.md` and `decisions/b.md` ...") now mark every named decision superseded; before, only a bare path was read, so verify's status check failed on vaults that write prose.
 ### Fixed
 - `CURRENT.md` (BC-10): nothing writes it, so a stale copy could be quoted as fact; `answer` now never cites it and the docs say so.
 - Goldens that could not fail (BC-17): removed the `reject_path: log/` and `inbox/` goldens (those folders are never indexed); `test_cite` now checks answers never cite them; the novel `wreck` golden is reworded so it no longer repeats the chapter text.

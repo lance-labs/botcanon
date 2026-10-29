@@ -64,6 +64,16 @@ with tempfile.TemporaryDirectory() as td:
           known and f"2026-02-01-pricing.md:{at + 2}" in q and "Price sourdough" in q, q)
     pricing.write_text(orig)
     run(v, "ingest")
+    # Owner-attribute weak spot: the person's name comes from the note title and "number" must not ride on "phone"
+    dana = v / "people" / "dana-okafor.md"
+    dorig = dana.read_text()
+    dana.write_text(dorig + "- Prefers phone.\n")
+    run(v, "ingest")
+    known, q = answer(v, "what is Dana Okafor's passport number")
+    check("passport number with a 'Prefers phone.' line: I don't know", not known, q)
+    dana.write_text(dorig)
+    run(v, "ingest")
+
 
     # Tiny vault: every word is "common" (1 of 3 notes > 25%). Must not cite a Date line.
     t = Path(td) / "tiny"
@@ -119,6 +129,12 @@ with tempfile.TemporaryDirectory() as td:
     a = brain.propose("Flour price rises in May", "t", "test", Path(td))
     b = brain.propose("Flour price rises in May", "t", "test", Path(td))
     check("same-second proposals both kept", a != b and a.exists() and b.exists())
+
+# Prior: lines may be prose naming several decisions in backticks (Lance-vault style)
+sys.path.insert(0, str(ROOT / "tools"))
+import brain  # noqa: E402
+got = brain.prior_paths("- Prior: twice-daily window in `decisions/b.md` (and earlier in `decisions/a.md`).\n- Prior: decisions/c.md\n")
+check("prose Prior: lines name every decision", got == ["decisions/b.md", "decisions/a.md", "decisions/c.md"], str(got))
 
 print("test_cite:", "PASS" if not FAILS else f"FAIL {FAILS}")
 sys.exit(1 if FAILS else 0)
