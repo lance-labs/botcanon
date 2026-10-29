@@ -117,10 +117,10 @@ def _targets() -> list[Path]:
 def owner_probes(owner: str, notes: list[Path]) -> list[dict]:
     """'I don't know' tests about the owner. A probe is skipped when its topic word appears in any note,
     since then the vault might really answer it."""
-    text = " ".join(p.read_text().lower() for p in notes)
+    words = set(re.findall(r"[a-z0-9]+", " ".join(p.read_text().lower() for p in notes)))
     out = []
     for topic, q in OWNER_PROBES:
-        if any(w in text for w in topic.split()):
+        if any(w in words for w in topic.split()):  # whole words: "pet" is not in "carpet"
             continue
         out.append({"id": "idk-owner-" + topic.replace(" ", "-"), "query": q.format(o=owner),
                     "expect_known": False, "reviewed": False})
