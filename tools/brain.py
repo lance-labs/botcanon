@@ -111,6 +111,16 @@ def superseded(vault: Path = None) -> set[str]:
     return out
 
 
+def successors(vault: Path = None) -> dict[str, str]:
+    """Replaced decision -> the decision whose Prior: line names it."""
+    vault = vault or VAULT
+    out = {}
+    for p in sorted((vault / "decisions").glob("*.md")):
+        for m in PRIOR_RE.finditer(p.read_text()):
+            out[m.group(1).strip("`")] = rel(p, vault)
+    return out
+
+
 _STATUS: dict[str, str | None] = {}
 
 
@@ -770,7 +780,8 @@ def main() -> int:
         if r.get("citation"):
             print(f"  quote: {r['citation']} (verified in file)")
         for s_ in r["sources"]:
-            print(f"  source: {s_}")
+            tag = r.get("source_status", {}).get(s_, "")
+            print(f"  source: {s_}" + (f" ({tag}: not current)" if tag in ("superseded", "proposed") else ""))
         for c in r["candidates"] if a.spans else []:
             print(f'  candidate: {c["path"]}:{c["line"]} "{c["quote"]}" (in file; coverage {c["coverage"]})')
         return 0 if r["known"] else 2
