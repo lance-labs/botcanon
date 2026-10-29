@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
-# Two-minute tour on a throwaway copy of the sample vault. Your checkout is never modified.
+# Two-minute tour on a throwaway copy of the TEST FIXTURE vault (tests/fixtures/vault). Your checkout is never modified.
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
-cp -r "$here"/{GOALS.md,CURRENT.md,decisions,people,projects,log,inbox,tools,evals} "$tmp"/
+cp -r "$here"/tests/fixtures/vault/{GOALS.md,CURRENT.md,decisions,people,projects,log,inbox,evals,retrieval_tests.yaml} "$tmp"/
+cp -r "$here"/tools "$tmp"/
 export BRAIN_VAULT="$tmp"
 b() { python3 "$tmp/tools/brain.py" "$@" 2>/dev/null; }
 step() { printf '\n\033[1m== %s\033[0m\n' "$*"; sleep "${DEMO_PAUSE:-6}"; }
 
-step "1. Load the sample notes (chunk, embed, index)"
+step "1. Load the fixture notes (chunk, embed, index)"
 b ingest
 step "2. Hybrid search"
 b search "who supplies our flour"

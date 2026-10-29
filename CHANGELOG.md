@@ -4,6 +4,15 @@ BotCanon (repo slug `botcanon`; formerly second-brain-starter).
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follow [SemVer](https://semver.org/); retrieval-quality changes are noted with their bench numbers.
 
+## [Unreleased]
+### Changed
+- The user vault starts empty (folder skeleton + `GOALS.md` stub). The fictional sample notes moved, unchanged, to `tests/fixtures/vault/` (TEST FIXTURE: CI, bench, test_mcp, demo only). Bench numbers unchanged.
+- verify with no tests prints "no evals yet; run evals init" and returns YELLOW (exit 0).
+- `--root` now reaches cite/evals helpers too (one `brain` module when run as a script).
+### Added
+- `brain.py evals init` (extractive, offline: question + expected note + quoted line per fact-like line, plus off-topic "I don't know" questions, to `evals/proposed_tests.yaml`) and `evals accept` (merge into `evals/retrieval_tests.yaml`).
+- Goldens with `expect_known: true|false` (answer-level checks). `tools/test_evals.py` in CI.
+
 ## [0.6.0] - 2026-10-28
 ### Changed
 - Project renamed to BotCanon (decided 2026-10-28). README v2: plain-to-technical order, bot-memory positioning, honest usage estimate; internals moved to `docs/`.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""End-to-end MCP test: spawn the server over stdio against a temp copy of the vault."""
+"""End-to-end MCP test: spawn the server over stdio against a temp copy of the test fixture vault."""
 import json, os, shutil, subprocess, sys, tempfile
 from pathlib import Path
 
@@ -9,7 +9,8 @@ ROOT = Path(__file__).resolve().parent.parent
 def main() -> int:
     with tempfile.TemporaryDirectory() as d:
         v = Path(d) / "vault"
-        shutil.copytree(ROOT, v, ignore=shutil.ignore_patterns(".git", ".venv", "__pycache__"))
+        shutil.copytree(ROOT / "tests" / "fixtures" / "vault", v, ignore=shutil.ignore_patterns(".index"))
+        shutil.copytree(ROOT / "tools", v / "tools", ignore=shutil.ignore_patterns("__pycache__", "status.json"))
         env = {**os.environ, "BRAIN_VAULT": str(v)}
         subprocess.run([sys.executable, str(v / "tools/brain.py"), "ingest"], env=env, check=True, capture_output=True)
         canon_before = {p: p.read_bytes() for p in v.rglob("*.md") if "inbox" not in p.parts}
