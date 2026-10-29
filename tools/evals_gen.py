@@ -147,7 +147,7 @@ def evals_init(per_note: int = 2, quotes: bool = False, owner: str = "") -> tupl
             n_rewrite += q.startswith(REWRITE)
             slug = re.sub(r"[^a-z0-9]+", "-", f"{Path(rel).stem}-{n}".lower()).strip("-")
             g = {"id": slug, "query": q, "expect_path": rel, "max_rank": 3, "source": f"{rel}:{n}",
-                 "expect_cite": f"{rel}:{n}", "reviewed": False}
+                 "expect_quote": brain.norm_line(line), "reviewed": False}
             if quotes:
                 g["quote"] = line
             goldens.append(g)
@@ -164,8 +164,8 @@ def evals_init(per_note: int = 2, quotes: bool = False, owner: str = "") -> tupl
               "#  - reword any other query the way you or your bots would actually ask it (don't copy the answer's words);\n"
               "#  - delete tests whose line isn't a fact worth remembering;\n"
               "#  - never change expect_path to whatever search returns today; that hides misses;\n"
-              "#  - expect_cite is the line holding the answer: verify fails unless the bot's answer quotes that line.\n"
-              "#    If you edit the note so the line moves, update expect_cite (or re-run evals init);\n"
+              "#  - expect_quote is the text of the line holding the answer: verify fails unless the bot's answer quotes a line\n"
+              "#    in expect_path with that text (line numbers may move; source: is only a hint). Reword the line, update it;\n"
               "#  - then set reviewed: true.\n"
               "# Then run: python3 tools/brain.py evals accept   (or --all-reviewed once you've checked every test)\n")
     out.write_text(header + yaml.safe_dump({"recall_at_5_floor": brain.RECALL5_FLOOR, "goldens": goldens},
