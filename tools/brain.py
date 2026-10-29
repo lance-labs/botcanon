@@ -660,9 +660,9 @@ def verify(as_json: bool = False) -> bool:
                 r = cited_answer(t["query"])
                 cite_ = r.get("citation", "") if r["known"] else ""
                 if t.get("expect_quote"):  # line text, so edits that shift line numbers don't break the test
-                    c = r["candidates"][0] if r["known"] else None
-                    got = norm_line(line_text(c["path"], c["line"])) if c else ""
-                    ok = bool(c) and c["path"] in want and got == norm_line(t["expect_quote"])
+                    m = re.match(r"^(.+?):(\d+) ", cite_)  # grade the line the answer actually cites, not candidates[0]
+                    got = norm_line(line_text(m.group(1), m.group(2))) if m else ""
+                    ok = bool(m) and m.group(1) in want and got == norm_line(t["expect_quote"])
                     want_s = f'{"|".join(want)} "{t["expect_quote"]}"'
                 else:  # legacy: exact path:line
                     ok = cite_.startswith(t["expect_cite"] + (":" if ":" not in t["expect_cite"] else " "))
