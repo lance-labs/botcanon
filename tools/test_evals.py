@@ -133,13 +133,18 @@ def main() -> int:
             r = b("verify")
             if r.returncode == 0 or "verify: RED" not in r.stdout or "tests_file: FAIL" not in r.stdout:
                 errs.append(f"{name} tests file must be RED and nonzero: {r.returncode} {r.stdout[-200:]}")
-        legacy = good["goldens"] + [{"id": "legacy-reject-list", "query": "croissant price", "reject_path": ["inbox/", "log/"]}]
+        first = next(t for t in good["goldens"] if "expect_path" in t)
+        legacy = good["goldens"] + [{"id": "legacy-reject-list", "query": "croissant price", "reject_path": ["inbox/", "log/"]},
+                                    {"id": "any-of-list", "query": first["query"], "max_rank": first["max_rank"],
+                                     "expect_path": ["people/nobody.md", first["expect_path"]]}]
         good["goldens"] = legacy
         tests.write_text(yaml.safe_dump({"recall_at_5_floor": 0.9, "cases": legacy}))
         r = b("verify")
         m = re.search(r"passed: (\d+)\s+failed: (\d+)", r.stdout)
         if not m or int(m.group(1)) + int(m.group(2)) != len(good["goldens"]) or "tests_file" in r.stdout:
             errs.append(f"legacy cases: should be read as goldens: {r.stdout[-200:]}")
+        if not re.search(r"^any-of-list: PASS", r.stdout, re.M):
+            errs.append("expect_path list: any listed note within max_rank should pass")
     print("test_evals: " + ("PASS" if not errs else "FAIL\n  " + "\n  ".join(errs)))
     return 1 if errs else 0
 
