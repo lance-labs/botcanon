@@ -60,6 +60,12 @@ KEY_QUESTIONS = {  # common field names mapped to questions people actually ask
     "goal": "what is the goal of {t}", "next step": "what is the next step for {t}", "location": "where is {t}",
     "schedule": "what is the schedule for {t}", "email": "what is the email for {t}", "phone": "what is the phone number for {t}",
 }
+OWNER_PROBES = [  # personal attributes a bot vault rarely holds; the README's known weak spot for the score gate
+    ("favorite color", "what is {o}'s favorite color"), ("blood type", "what is {o}'s blood type"),
+    ("dentist", "who is {o}'s dentist"), ("shoe size", "what is {o}'s shoe size"),
+    ("passport", "what is {o}'s passport number"), ("bank account", "what is {o}'s bank account number"),
+    ("childhood pet", "what was the name of {o}'s childhood pet"), ("allergies", "what is {o} allergic to"),
+]
 DERIVED = {"CURRENT.md"}  # dashboards rank below their sources by design; never a test target
 REWRITE = "REWRITE:"
 
@@ -108,7 +114,20 @@ def _targets() -> list[Path]:
     return out
 
 
-def evals_init(per_note: int = 2, quotes: bool = False) -> tuple[str, int]:
+def owner_probes(owner: str, notes: list[Path]) -> list[dict]:
+    """'I don't know' tests about the owner. A probe is skipped when its topic word appears in any note,
+    since then the vault might really answer it."""
+    text = " ".join(p.read_text().lower() for p in notes)
+    out = []
+    for topic, q in OWNER_PROBES:
+        if any(w in text for w in topic.split()):
+            continue
+        out.append({"id": "idk-owner-" + topic.replace(" ", "-"), "query": q.format(o=owner),
+                    "expect_known": False, "reviewed": False})
+    return out
+
+
+def evals_init(per_note: int = 2, quotes: bool = False, owner: str = "") -> tuple[str, int]:
     notes = _targets()
     if not notes:
         return "evals init: no notes yet. Add a few notes to decisions/, people/ or projects/, then run it again.", 0
@@ -134,6 +153,8 @@ def evals_init(per_note: int = 2, quotes: bool = False) -> tuple[str, int]:
     for q in IDK_QUESTIONS:
         goldens.append({"id": "idk-" + re.sub(r"[^a-z0-9]+", "-", q.lower()).strip("-"), "query": q,
                         "expect_known": False, "reviewed": False})
+    probes = owner_probes(owner, notes) if owner else []
+    goldens += probes
     out = brain.VAULT / "evals" / "proposed_tests.yaml"
     out.parent.mkdir(parents=True, exist_ok=True)
     header = ("# PROPOSED tests from `brain.py evals init`. This file is gitignored; it is never committed.\n"
@@ -146,9 +167,10 @@ def evals_init(per_note: int = 2, quotes: bool = False) -> tuple[str, int]:
               "# Then run: python3 tools/brain.py evals accept   (or --all-reviewed once you've checked every test)\n")
     out.write_text(header + yaml.safe_dump({"recall_at_5_floor": brain.RECALL5_FLOOR, "goldens": goldens},
                                            sort_keys=False, allow_unicode=True, width=200))
-    n_idk = len(IDK_QUESTIONS)
+    n_idk = len(IDK_QUESTIONS) + len(probes)
+    hint = "" if owner else " Tip: add --owner \"<name>\" (or set BRAIN_OWNER) to also probe questions about you."
     return (f"evals init: wrote {brain.rel(out)} ({len(goldens) - n_idk} answerable from {len(notes)} notes, "
-            f"{n_rewrite} need a question written, {n_idk} I-don't-know). Review it, then run: evals accept"), 0
+            f"{n_rewrite} need a question written, {n_idk} I-don't-know). Review it, then run: evals accept.{hint}"), 0
 
 
 def evals_accept(all_reviewed: bool = False) -> tuple[str, int]:

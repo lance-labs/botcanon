@@ -8,6 +8,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 ### Changed
 - `status` (and `flush`) write `status.json` into the store's `.index/`, not the engine's `tools/` folder, so `--root` never writes one store's stats into another checkout.
 ### Added
+- `evals init --owner "<name>"` (or `BRAIN_OWNER`) proposes up to 8 "I don't know" tests about the owner (favorite color, blood type, dentist, ...), skipping any topic the notes mention. This is the weak spot in Known limits.
 - verify names a legacy `tools/retrieval_tests.yaml` and suggests moving it to `evals/`.
 - `tools/test_incremental.py` (in CI): after an edit, a delete and forced re-indexing of unchanged notes, an incremental index returns the same top-10 as a full rebuild for every fixture query in lexical, semantic and hybrid mode.
 - `expect_path` accepts a list; the test passes when any listed note is within `max_rank` (older test files use this).

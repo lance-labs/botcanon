@@ -707,6 +707,7 @@ def main() -> int:
     ev.add_argument("action", choices=["init", "accept"])
     ev.add_argument("--per-note", type=int, default=2)
     ev.add_argument("--quotes", action="store_true", help="init: copy each answer line into the test file (off by default)")
+    ev.add_argument("--owner", default=os.environ.get("BRAIN_OWNER", ""), help="init: also propose 'I don't know' tests about this person (default $BRAIN_OWNER)")
     ev.add_argument("--all-reviewed", action="store_true", help="accept: confirm you reviewed every proposed test")
     f = sub.add_parser("flush"); f.add_argument("-m", default="flush"); f.add_argument("--no-push", action="store_true")
     a = ap.parse_args()
@@ -739,7 +740,7 @@ def main() -> int:
         print(json.dumps(status(), indent=2))
     elif a.cmd == "evals":
         from evals_gen import evals_accept, evals_init
-        msg, rc = evals_init(a.per_note, a.quotes) if a.action == "init" else evals_accept(a.all_reviewed)
+        msg, rc = evals_init(a.per_note, a.quotes, a.owner) if a.action == "init" else evals_accept(a.all_reviewed)
         print(msg)
         return rc
     elif a.cmd == "flush":

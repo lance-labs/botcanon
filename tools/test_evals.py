@@ -89,6 +89,17 @@ def main() -> int:
         if not _question("Pricing", "- Compiler notes: use gcc 12 always", "Compiler notes", "x.md", 3).startswith(REWRITE):
             errs.append("an unknown field name should give a REWRITE: placeholder, not a template")
 
+        # owner probes: --owner adds 'I don't know' tests about the owner, skipping topics the notes mention
+        (v / "people" / "dana-okafor.md").write_text((v / "people" / "dana-okafor.md").read_text() + "\n- Dentist: Dr. Example, Main St.\n")
+        b("evals", "init", "--owner", "Dana Okafor")
+        ids = {t["id"]: t for t in yaml.safe_load(prop.read_text())["goldens"]}
+        probes = [t for i, t in ids.items() if i.startswith("idk-owner-")]
+        if len(probes) < 5 or any(t.get("expect_known") is not False or "Dana Okafor" not in t["query"] for t in probes):
+            errs.append(f"--owner should add owner 'I don't know' probes: {sorted(ids)}")
+        if "idk-owner-dentist" in ids:
+            errs.append("a probe whose topic the notes mention (dentist) must be skipped")
+        g("checkout", "-q", "--", "people/dana-okafor.md")
+
         # fix 5: --quotes opt-in copies the exact line
         b("evals", "init", "--quotes")
         q = [t for t in yaml.safe_load(prop.read_text())["goldens"] if "expect_path" in t]
