@@ -27,11 +27,9 @@ Your job:
    (for example "a supplier's delivery day"). Never the question text.
 4. Flag regressions: compare with your last report and say what got worse.
    If verify is RED, report that first.
-5. To re-check the search cutoff on this vault, run python3 tools/bench.py on a throwaway copy
-   and report the numbers; never commit its output.
-6. Never change a question or its expected note just to make it pass.
+5. Never change a question or its expected note just to make it pass.
    If a question was wrong, say so in the report and fix it in your own set.
-7. Rotate a few questions each month.
+6. Rotate a few questions each month.
 
 Always ask the owner first before deleting or overwriting anything, or running a command
 that writes to the vault.
