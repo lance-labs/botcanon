@@ -59,7 +59,12 @@ STOPWORDS = frozenset(
     me my of on or our should so than that the their them then there these they this to us was we were
     what when where which who whom why will with would you your about any""".split()
 )
-PRIOR_RE = re.compile(r"^-\s*Prior:\s*(\S+)", re.MULTILINE)
+PRIOR_RE = re.compile(r"^-\s*Prior:(.*)$", re.MULTILINE)
+PRIOR_PATH_RE = re.compile(r"`?(decisions/[^`\s]+?\.md)`?")  # every decision path named on a Prior: line, prose allowed
+
+
+def prior_paths(text: str) -> list[str]:
+    return [m.group(1) for line in PRIOR_RE.finditer(text) for m in PRIOR_PATH_RE.finditer(line.group(1))]
 DATE_RE = re.compile(r"^-\s*Date:\s*(\d{4}-\d{2}-\d{2})", re.MULTILINE)
 DECISION_RE = re.compile(r"^-\s*Decision:\s*(.+)$", re.MULTILINE)
 REVISIT_RE = re.compile(r"^-?\s*Revisit:\s*(.+)$", re.MULTILINE | re.IGNORECASE)
@@ -107,8 +112,7 @@ def superseded(vault: Path = None) -> set[str]:
     vault = vault or VAULT
     out = set()
     for p in (vault / "decisions").glob("*.md"):
-        for m in PRIOR_RE.finditer(p.read_text()):
-            out.add(m.group(1).strip("`"))
+        out.update(prior_paths(p.read_text()))
     return out
 
 
@@ -117,8 +121,8 @@ def successors(vault: Path = None) -> dict[str, str]:
     vault = vault or VAULT
     out = {}
     for p in sorted((vault / "decisions").glob("*.md")):
-        for m in PRIOR_RE.finditer(p.read_text()):
-            out[m.group(1).strip("`")] = rel(p, vault)
+        for q in prior_paths(p.read_text()):
+            out[q] = rel(p, vault)
     return out
 
 
