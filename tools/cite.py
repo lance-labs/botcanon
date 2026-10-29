@@ -83,7 +83,11 @@ def coverage(terms: list[str] | dict[str, float], line: str, title: str = "") ->
     if not lw:
         return 0.0
     m = _vecs(lw)
-    return sum(wt for t, wt in w.items() if t in lw or float((m @ _vecs([t])[0]).max()) >= SPAN_SYN_COS) / sum(w.values())
+    # A line word that already matches a question word exactly can't also stand in for another one
+    # ("Prefers phone." must not cover both "phone" and "number").
+    free = [i for i, x in enumerate(lw) if x not in w]
+    hit = lambda t: t in lw or bool(free) and float((m[free] @ _vecs([t])[0]).max()) >= SPAN_SYN_COS
+    return sum(wt for t, wt in w.items() if hit(t)) / sum(w.values())
 
 
 def in_file(c: dict) -> bool:
