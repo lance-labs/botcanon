@@ -1,3 +1,3 @@
-fastembed>=0.3
-numpy
-pyyaml
+fastembed>=0.8,<0.9
+numpy>=1.26,<3
+pyyaml>=6,<7
