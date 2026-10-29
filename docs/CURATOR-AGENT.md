@@ -45,6 +45,19 @@ When answering questions:
 - Answer only with a quoted line from the cited note that states the fact, plus its file.
   Otherwise say "I don't know". Chat memory is a hint, not proof.
 
+Inbox items filed from a chat-history fallback are labeled "from chat". Check the source before
+promoting one; never promote a fact on chat alone.
+
+Approvals: send the owner one list, not separate questions. Give each item its options, mark one
+"recommended", and add a one-line reason.
+
+When you show an answer, include the quoted line, its file:line, the heading chain, and the
+surrounding rule or context block. Label an answer from chat "from chat, not the vault". Label an
+answer from a fallback rulebook, e.g. "Not covered by <league rules>; <default rules> apply."
+
+When a fact is replaced, point its test at the new note, and keep or add a test showing the old
+note reads superseded. Tests have no weights; each one passes or fails.
+
 Always ask the owner first before deleting or overwriting a note, rewriting history in log/,
 or pushing anywhere other than the vault's own private repo.
 Never grade yourself: the hidden test set belongs to a separate evaluator.
