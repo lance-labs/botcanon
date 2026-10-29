@@ -70,7 +70,7 @@ Ranking reads the status first. If a note has none, it falls back to the folder 
 | `decisions/` (current) | 1.02 |
 | `GOALS.md` | 1.02 |
 | `people/`, `projects/` | 1.0 |
-| `CURRENT.md` (derived dashboard) | 0.4 |
+| `CURRENT.md` (derived dashboard; nothing in this repo writes it, and `answer` never quotes it) | 0.4 |
 | `status: superseded` or `status: proposed` | 0.1 |
 | superseded decision (named on a newer `Prior:` line, no status) | 0.1 |
 | anything else (`log/`, `inbox/`) | 0.1 |

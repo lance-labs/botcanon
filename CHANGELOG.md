@@ -6,6 +6,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 
 ## [Unreleased]
 ### Fixed
+- `CURRENT.md` (BC-10): nothing writes it, so a stale copy could be quoted as fact; `answer` now never cites it and the docs say so.
 - Goldens that could not fail (BC-17): removed the `reject_path: log/` and `inbox/` goldens (those folders are never indexed); `test_cite` now checks answers never cite them; the novel `wreck` golden is reworded so it no longer repeats the chapter text.
 - Git worktrees (BC-16): `.git` may be a file; verify now checks hooks at `git rev-parse --git-path hooks`, `flush` commits there, and `install-hooks.sh` installs there.
 - Supply chain (BC-15, partial): `requirements.txt` pins compatible ranges (fastembed 0.8.x, numpy <3, PyYAML 6.x); CI checks the gitleaks tarball's SHA-256 before installing it. Model files are still fetched by fastembed without a recorded hash.

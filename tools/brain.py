@@ -46,6 +46,7 @@ EMBED_MODEL = os.environ.get("BRAIN_EMBED_MODEL", "BAAI/bge-small-en-v1.5")
 
 CANON_DIRS = tuple(os.environ.get("BRAIN_DIRS", "decisions,people,projects").split(","))
 CANON_ROOT = ("GOALS.md", "CURRENT.md")
+DERIVED = {"CURRENT.md"}  # hand-kept or generated summary; searchable at low weight, never quoted as a source
 RRF_K = 60
 CANDIDATES = 40
 MAX_HITS_PER_NOTE = 2
