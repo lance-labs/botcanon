@@ -388,7 +388,10 @@ def propose(text: str, from_agent: str, source: str, vault: Path = None) -> Path
     inbox.mkdir(exist_ok=True)
     now = datetime.now(timezone.utc)
     slug = SLUG_RE.sub("-", text.lower())[:40].strip("-") or "note"
-    p = inbox / f"{now:%Y-%m-%dT%H%M%S}-{slug}.md"
+    p, n = inbox / f"{now:%Y-%m-%dT%H%M%S}-{slug}.md", 1
+    while p.exists():  # same second + same opening words: never overwrite an earlier proposal
+        n += 1
+        p = inbox / f"{now:%Y-%m-%dT%H%M%S}-{slug}-{n}.md"
     p.write_text(f"---\nstatus: proposed\nfrom_agent: {json.dumps(from_agent)}\nsource: {json.dumps(source)}\n"
                  f"date: {now.isoformat()}\n---\n\n{text.strip()}\n")
     return p
