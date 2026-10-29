@@ -6,6 +6,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 
 ## [Unreleased]
 ### Fixed
+- Git worktrees (BC-16): `.git` may be a file; verify now checks hooks at `git rev-parse --git-path hooks`, `flush` commits there, and `install-hooks.sh` installs there.
 - Supply chain (BC-15, partial): `requirements.txt` pins compatible ranges (fastembed 0.8.x, numpy <3, PyYAML 6.x); CI checks the gitleaks tarball's SHA-256 before installing it. Model files are still fetched by fastembed without a recorded hash.
 - Claims match the repo (BC-14): WHY.md no longer says "one Python file" and notes the first-run model download; the old CHANGELOG CI path is annotated; `bench.py --root <your store>` no longer rewrites the repo README table (it only ever shows the test fixture).
 - Two proposals filed in the same second with the same opening words no longer overwrite each other (BC-13); the second gets a `-2` suffix. Tested in `test_cite.py`.
@@ -48,6 +49,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 
 ## [0.5.1] - 2026-10-28
 ### Fixed
+- Git worktrees (BC-16): `.git` may be a file; verify now checks hooks at `git rev-parse --git-path hooks`, `flush` commits there, and `install-hooks.sh` installs there.
 - Score ties now break on note path, then position in the note, never on insert order, so re-indexing one note can't reshuffle tied results. (The author's vault had a worse version of this: a contentless FTS5 table never subtracted deleted rows from BM25 stats, so 13/97 goldens ranked differently after an incremental reindex. The starter's FTS5 table stores content, so its deletes were already exact.)
 
 ## [0.5.0] - 2026-10-28
