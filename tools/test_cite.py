@@ -38,6 +38,10 @@ with tempfile.TemporaryDirectory() as td:
     for ask in ("what are the opening hours", "when does the bakery open", "how much is a sourdough loaf"):
         _, q = answer(v, ask)
         check(f"never quotes metadata: {ask}", not any(f"- {m}:" in q for m in ("Date", "Owner", "From", "Source", "Prior", "Revisit")), q)
+    # BC-03: the replaced winter hours are labelled and never quoted as the answer.
+    r = run(v, "answer", "8 AM to 2 PM Wednesday to Sunday")
+    check("superseded source labelled", "2026-01-10-opening-hours.md (superseded: not current)" in r.stdout, r.stdout[-300:])
+    check("superseded line never quoted", "2026-01-10-opening-hours.md:" not in r.stdout)
     for ask in ("what is the capital of Peru", "what is the employee dental plan"):
         known, q = answer(v, ask)
         check(f"I don't know: {ask}", not known, q)
@@ -49,7 +53,14 @@ with tempfile.TemporaryDirectory() as td:
                                       ("Holidays", "Close the last week of August.")]):
         (t / "decisions" / f"2026-0{n+1}-01-{title.lower()}.md").write_text(
             f"# Decision: {title}\n\n- Status: approved\n- Date: 2026-0{n+1}-01\n- Decision: {dec}\n")
+    (t / "decisions" / "2026-04-01-parking.md").write_text(
+        "# Decision: Parking\n\n- Status: approved\n- Date: 2026-04-01\n- Decision: Park on Elm Street.\n"
+        "- Prior: decisions/2026-01-01-parking.md\n")
+    p0 = t / "decisions" / "2026-01-01-parking.md"
+    p0.write_text(p0.read_text().replace("Status: approved", "Status: superseded"))
     run(t, "ingest")
+    r = run(t, "answer", "park behind the shop")
+    check("only-superseded match never quoted", "2026-01-01-parking.md:" not in r.stdout, r.stdout[-300:])
     for ask in ("where do we park", "which coffee roaster", "parking coffee holidays"):
         _, q = answer(t, ask)
         check(f"tiny vault never cites Date: {ask}", "- Date:" not in q, q)

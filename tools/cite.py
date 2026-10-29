@@ -90,14 +90,28 @@ def candidates(q: str, paths: list[str], n: int = 3) -> list[dict]:
     return [c for c in out[:n] if in_file(c)]
 
 
+def source_status(paths: list[str]) -> dict[str, str]:
+    """approved | superseded | proposed for each source; Prior: lines count as superseded."""
+    sup = brain.superseded()
+    return {p: "superseded" if p in sup else (brain.read_status((brain.VAULT / p).read_text(encoding="utf-8")) or "approved")
+            for p in paths}
+
+
 def cited_answer(q: str) -> dict:
     base = brain.answer(q)
     if not base["known"]:
-        return {**base, "candidates": []}
-    cands = candidates(q, base["sources"])
+        return {**base, "candidates": [], "source_status": {}}
+    st = source_status(base["sources"])
+    current = [p for p in base["sources"] if st[p] not in ("superseded", "proposed")]
+    if not current:  # only replaced notes match: never state them as the current fact
+        succ = brain.successors()
+        nxt = sorted({succ[p] for p in base["sources"] if p in succ})
+        return {"known": False, "answer": "I don't know: only superseded notes match" + (f"; see {', '.join(nxt)}" if nxt else "") + ".",
+                "sources": base["sources"], "source_status": st, "candidates": []}
+    cands = candidates(q, current)
     if not cands or cands[0]["coverage"] < SPAN_COVER:
         return {"known": False, "answer": "I don't know: no line in the cited notes states it.",
-                "sources": base["sources"], "candidates": cands}
+                "sources": base["sources"], "source_status": st, "candidates": cands}
     c = cands[0]
-    return {"known": True, "answer": c["quote"], "sources": base["sources"], "candidates": cands,
+    return {"known": True, "answer": c["quote"], "sources": base["sources"], "source_status": st, "candidates": cands,
             "citation": f'{c["path"]}:{c["line"]} "{c["quote"]}"'}
