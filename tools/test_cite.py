@@ -78,6 +78,21 @@ with tempfile.TemporaryDirectory() as td:
     run(v, "ingest")
     r = run(v, "verify")
     check("verify reports a bad log line", r.returncode != 0 and "2026-03.jsonl:" in r.stdout, r.stdout[-300:])
+# BC-08: one process (like the MCP server) must see a status edit without restarting.
+with tempfile.TemporaryDirectory() as td:
+    v = Path(td) / "vault"
+    shutil.copytree(ROOT / "tests" / "fixtures" / "vault", v)
+    sys.path.insert(0, str(ROOT / "tools"))
+    import brain  # noqa: E402
+    brain.set_root(str(v), None, None)
+    n = "people/ari-novak.md"
+    before = brain.path_weight(n, set())
+    import os, time
+    f = v / n
+    f.write_text(f.read_text().replace("Status: approved", "Status: superseded"))
+    os.utime(f, (time.time() + 5, time.time() + 5))
+    after = brain.path_weight(n, set())
+    check("status edit seen in the same process", before == 1.0 and after == 0.1, f"{before} -> {after}")
 
 print("test_cite:", "PASS" if not FAILS else f"FAIL {FAILS}")
 sys.exit(1 if FAILS else 0)
