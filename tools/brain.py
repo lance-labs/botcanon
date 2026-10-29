@@ -600,11 +600,12 @@ def load_tests(path: Path = None) -> tuple[dict, str]:
 
 
 def hooks_installed() -> tuple[bool, str]:
-    git = VAULT / ".git"
-    if not git.is_dir():
+    if not (VAULT / ".git").exists():  # a dir, or a file in a git worktree
         return True, "not a git checkout"
+    hp = git("rev-parse", "--git-path", "hooks").stdout.strip()
+    hooks = (VAULT / hp) if hp else VAULT / ".git" / "hooks"
     for h in ("pre-commit", "pre-push"):
-        a, b = TOOLS / "hooks" / h, git / "hooks" / h
+        a, b = TOOLS / "hooks" / h, hooks / h
         if not b.is_file() or a.read_bytes() != b.read_bytes():
             return False, f"{h} not installed: run tools/install-hooks.sh"
     return True, "installed"
@@ -719,7 +720,7 @@ def flush(message: str, push: bool = False, allow_public: bool = False) -> int:
     li = meta(conn, "last_index_ts")
     li_ts = datetime.fromisoformat(li).timestamp() if li else 0
     stale = [p for p in canon_files() + sorted((VAULT / "log").glob("*.jsonl")) if p.stat().st_mtime > li_ts]
-    dirty = git("status", "--porcelain").stdout.strip() if (VAULT / ".git").is_dir() else ""
+    dirty = git("status", "--porcelain").stdout.strip() if (VAULT / ".git").exists() else ""
     if not stale and not dirty and li:
         print("flush: nothing changed (no-op)")
         return 0
@@ -729,7 +730,7 @@ def flush(message: str, push: bool = False, allow_public: bool = False) -> int:
         print("flush: verify RED; refusing to commit")
         return 1
     status()
-    if (VAULT / ".git").is_dir():
+    if (VAULT / ".git").exists():
         # Stage only memory paths (canon, log, inbox, the reviewed tests), never `git add -A`:
         # a stray file in the checkout (export, scratch, secrets) is not published by a bot's flush.
         tracked = set(git("ls-files").stdout.split())
