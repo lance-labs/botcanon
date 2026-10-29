@@ -612,6 +612,8 @@ def verify(as_json: bool = False) -> bool:
     print(f"freshness: {fr['level'].upper()} {'; '.join(fr['red'] + fr['yellow'])}")
     for d in fr["revisit_due"]:
         print(f"  revisit due: {d['path']} ({d['revisit']})")
+    if TESTS.parent.name == "tools" and TESTS.is_relative_to(VAULT):
+        print(f"tests: using legacy {TESTS.relative_to(VAULT)}; move it to evals/retrieval_tests.yaml")
     if no_evals:
         print(f"evals: none yet ({TESTS.relative_to(VAULT) if TESTS.is_relative_to(VAULT) else TESTS}); run: python3 tools/brain.py evals init")
     print(f"verify: {'GREEN' if ok and fr['level'] == 'green' and not no_evals else 'YELLOW' if ok else 'RED'}")
@@ -625,7 +627,8 @@ def status() -> dict:
          "chunks": conn.execute("SELECT count(*) FROM chunks").fetchone()[0],
          "last_index_ts": meta(conn, "last_index_ts"), "freshness": fr,
          "inbox_pending": len(list((VAULT / "inbox").glob("*.md"))) if (VAULT / "inbox").is_dir() else 0}
-    (TOOLS / "status.json").write_text(json.dumps(s, indent=2))
+    INDEX_DIR.mkdir(parents=True, exist_ok=True)
+    (INDEX_DIR / "status.json").write_text(json.dumps(s, indent=2))  # in the store's own (gitignored) index dir
     return s
 
 
