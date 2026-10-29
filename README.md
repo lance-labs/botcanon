@@ -30,7 +30,7 @@ The sample notes describe Juniper Bakery, a fictional business. Replace them wit
 | Outdated facts | Old and new statements sit side by side | Replaced facts are marked and ranked down |
 | Proof | "I remember" | `file:line "quote"`, checked against the file |
 
-**On usage savings: expected, not measured.** We have not measured token or usage savings on real bots. What we can measure: a lookup on the sample notes returns about 430 to 550 characters, roughly 110 to 140 tokens (assuming about 4 characters per token). To estimate your own saving, count the characters in a chat history your bot would otherwise reread, divide by 4, and compare with that lookup size. The saving only holds if the bot actually stops rereading the history; this tool doesn't control that.
+**On usage savings: expected, not measured.** We have not measured token or usage savings on real bots. What we can measure: a lookup on the sample notes returns about 430 to 550 characters, roughly 110 to 140 tokens (assuming about 4 characters per token). To estimate your own saving, count the characters in a chat history your bot would otherwise reread, divide by 4, and compare with that lookup size. Savings depend on your bots looking things up here instead of relying on long chats. The agent rules below make that the default; the chat app still decides how much history it loads.
 
 ## What you get
 
@@ -63,7 +63,7 @@ Setup times are estimates. The Windows steps are untested; reports welcome.
 
 1. **Make a GitHub account.** Go to https://github.com/signup and follow the steps. The free plan is enough.
 2. **Install GitHub Desktop** from https://desktop.github.com/ and sign in with that account.
-3. **Get your own copy of this repo.** Open https://github.com/rsj2h4sr86-creator/botcanon (pending the repo rename), click **Use this template**, then **Create a new repository**. Name it `my-brain` and choose **Private**.
+3. **Get your own copy of this repo.** Open https://github.com/rsj2h4sr86-creator/botcanon, click **Use this template**, then **Create a new repository**. Name it `my-brain` and choose **Private**.
 4. **Clone it to your computer.** In GitHub Desktop, choose **File → Clone repository**, pick `my-brain`, choose a folder, then click **Clone**.
 5. **Install Python** 3.10 or newer from https://www.python.org/downloads/. On Windows, tick **Add python.exe to PATH** in the installer.
 6. **Install gitleaks.** Mac: `brew install gitleaks`. Windows or Linux: download the release for your system from https://github.com/gitleaks/gitleaks/releases and put it on your PATH.
@@ -132,7 +132,7 @@ Put these in every agent's boot instructions. The numbers come from the author's
 ## Quickstart (terminal)
 
 ```sh
-git clone https://github.com/rsj2h4sr86-creator/botcanon.git my-brain && cd my-brain   # URL pending the repo rename
+git clone https://github.com/rsj2h4sr86-creator/botcanon.git my-brain && cd my-brain
 python3 -m venv .venv && . .venv/bin/activate
 pip install -r requirements.txt          # fastembed downloads BAAI/bge-small-en-v1.5 on first use
 tools/install-hooks.sh                   # needs gitleaks on PATH (see Secret scanning)

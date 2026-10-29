@@ -4,7 +4,7 @@ BotCanon (repo slug `botcanon`; formerly second-brain-starter).
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follow [SemVer](https://semver.org/); retrieval-quality changes are noted with their bench numbers.
 
-## [Unreleased]
+## [0.6.0] - 2026-10-28
 ### Changed
 - Project renamed to BotCanon (decided 2026-10-28). README v2: plain-to-technical order, bot-memory positioning, honest usage estimate; internals moved to `docs/`.
 
