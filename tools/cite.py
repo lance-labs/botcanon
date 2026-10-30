@@ -52,8 +52,18 @@ def _keep(t: str) -> bool:
     return len(t) >= 3 or (len(t) >= 2 and any(ch.isdigit() for ch in t))
 
 
+def scoped_docs(q: str) -> list[set[str]]:
+    """Word sets of the notes in scope for q (Lance 2026-10-30 16:03 ET): document frequency, and so the
+    common-word discount, is counted only within the rulebooks that can answer q (scope gates, the default
+    override, fallback-only notes), so adding one league's rulebook can't reweight another scope's questions."""
+    files = brain.canon_files(brain.VAULT)
+    allowed = brain.apply_scope_gates(q, {brain.rel(f) for f in files})
+    return [_words(f.read_text(encoding="utf-8")) for f in files if brain.rel(f) in allowed] or \
+           [_words(f.read_text(encoding="utf-8")) for f in files]
+
+
 def attribute_terms(q: str) -> list[str]:
-    docs = [_words(p.read_text(encoding="utf-8")) for p in brain.canon_files(brain.VAULT)]
+    docs = scoped_docs(q)
     stop = {_norm(w) for w in brain.STOPWORDS} | STOP | {_norm(w) for w in OWNER}
     terms = [t for t in dict.fromkeys(_norm(w) for w in re.findall(r"[A-Za-z0-9']+", q)) if t not in stop and _keep(t)]
     n = max(len(docs), 1)
@@ -66,7 +76,7 @@ def attribute_terms(q: str) -> list[str]:
 def term_weights(q: str) -> dict[str, float]:
     """Every content word of the question counts; rare ones count more. Dropping common words
     entirely let "when does the bakery open" be answered by any line that says "bakery"."""
-    docs = [_words(p.read_text(encoding="utf-8")) for p in brain.canon_files(brain.VAULT)]
+    docs = scoped_docs(q)
     stop = {_norm(w) for w in brain.STOPWORDS} | STOP | {_norm(w) for w in OWNER}
     terms = [t for t in dict.fromkeys(_norm(w) for w in re.findall(r"[A-Za-z0-9']+", q)) if t not in stop and _keep(t)]
     n = max(len(docs), 1)

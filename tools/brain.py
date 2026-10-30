@@ -178,6 +178,21 @@ def scope_defaults(q: str) -> list[tuple["re.Pattern", "re.Pattern", str]]:
     return out
 
 
+FALLBACK_ONLY_RE = re.compile(r"^-\s*Scope-fallback-only:\s*true\s*$", re.MULTILINE | re.IGNORECASE)
+_FBO: dict[str, tuple[float, bool]] = {}
+
+
+def fallback_only(path: str) -> bool:
+    """`- Scope-fallback-only: true` on an ungated note: it answers only as some scope's declared default
+    (under SCOPE_OVERRIDE), never a question that names no scope (e.g. Dizzy Dean, Hopewell's fallback)."""
+    fp = VAULT / path
+    mt = fp.stat().st_mtime if fp.is_file() else -1.0
+    hit = _FBO.get(path)
+    if hit is None or hit[0] != mt:
+        _FBO[path] = (mt, bool(FALLBACK_ONLY_RE.search(fp.read_text())) if mt >= 0 else False)
+    return _FBO[path][1]
+
+
 def apply_scope_gates(q: str, paths: set[str]) -> set[str]:
     """Paths allowed for query q (see scope_gate). Under SCOPE_OVERRIDE only ungated notes whose path
     matches the override are allowed (the scope's declared default rulebook)."""
@@ -185,7 +200,7 @@ def apply_scope_gates(q: str, paths: set[str]) -> set[str]:
     if SCOPE_OVERRIDE is not None:
         return {p for p, g in gates.items() if g is None and SCOPE_OVERRIDE.search(p)}
     inscope = {p for p, g in gates.items() if g is not None and g.search(q)}
-    return inscope if inscope else {p for p, g in gates.items() if g is None}
+    return inscope if inscope else {p for p, g in gates.items() if g is None and not fallback_only(p)}
 
 
 def path_weight(path: str, sup: set[str]) -> float:
