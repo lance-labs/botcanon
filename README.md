@@ -85,7 +85,7 @@ Setup times are estimates. The Windows steps are untested; reports welcome.
 
 1. **Make a GitHub account.** Go to https://github.com/signup and follow the steps. The free plan is enough.
 2. **Install GitHub Desktop** from https://desktop.github.com/ and sign in with that account.
-3. **Get your own copy of this repo.** Open https://github.com/rsj2h4sr86-creator/botcanon, click **Use this template**, then **Create a new repository**. Name it `my-brain` and choose **Private**.
+3. **Get your own copy of this repo.** Open https://github.com/lance-labs/botcanon, click **Use this template**, then **Create a new repository**. Name it `my-brain` and choose **Private**.
 4. **Clone it to your computer.** In GitHub Desktop, choose **File → Clone repository**, pick `my-brain`, choose a folder, then click **Clone**.
 5. **Install Python** 3.10 or newer from https://www.python.org/downloads/. On Windows, tick **Add python.exe to PATH** in the installer.
 6. **Install gitleaks.** Mac: `brew install gitleaks`. Windows or Linux: download the release for your system from https://github.com/gitleaks/gitleaks/releases and put it on your PATH.
@@ -186,7 +186,7 @@ Put these in every agent's boot instructions. The numbers come from the author's
 ## Quickstart (terminal)
 
 ```sh
-git clone https://github.com/rsj2h4sr86-creator/botcanon.git my-brain && cd my-brain
+git clone https://github.com/lance-labs/botcanon.git my-brain && cd my-brain
 python3 -m venv .venv && . .venv/bin/activate
 pip install -r requirements.txt          # fastembed downloads BAAI/bge-small-en-v1.5 on first use
 git config user.email >/dev/null || git config user.name "Your Name"; git config user.email >/dev/null || git config user.email "you@example.com"   # flush commits need a git identity
