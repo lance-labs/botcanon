@@ -184,7 +184,8 @@ _FBO: dict[str, tuple[float, bool]] = {}
 
 def fallback_only(path: str) -> bool:
     """`- Scope-fallback-only: true` on an ungated note: it answers only as some scope's declared default
-    (under SCOPE_OVERRIDE), never a question that names no scope (e.g. Dizzy Dean, Hopewell's fallback)."""
+    (under SCOPE_OVERRIDE), never a question that names no scope (e.g. Dizzy Dean, Hopewell's fallback).
+    It may also carry its own `- Scope-gate:` so questions naming it directly still reach it."""
     fp = VAULT / path
     mt = fp.stat().st_mtime if fp.is_file() else -1.0
     hit = _FBO.get(path)
@@ -198,7 +199,7 @@ def apply_scope_gates(q: str, paths: set[str]) -> set[str]:
     matches the override are allowed (the scope's declared default rulebook)."""
     gates = {p: scope_gate(p) for p in paths}
     if SCOPE_OVERRIDE is not None:
-        return {p for p, g in gates.items() if g is None and SCOPE_OVERRIDE.search(p)}
+        return {p for p, g in gates.items() if (g is None or fallback_only(p)) and SCOPE_OVERRIDE.search(p)}  # a fallback-only rulebook may carry its own gate
     inscope = {p for p, g in gates.items() if g is not None and g.search(q)}
     return inscope if inscope else {p for p, g in gates.items() if g is None and not fallback_only(p)}
 

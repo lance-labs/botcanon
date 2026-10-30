@@ -53,13 +53,16 @@ def _keep(t: str) -> bool:
 
 
 def scoped_docs(q: str) -> list[set[str]]:
-    """Word sets of the notes in scope for q (Lance 2026-10-30 16:03 ET): document frequency, and so the
-    common-word discount, is counted only within the rulebooks that can answer q (scope gates, the default
-    override, fallback-only notes), so adding one league's rulebook can't reweight another scope's questions."""
+    """Word sets for document frequency (the common-word discount) for q (Lance 2026-10-30 16:03 ET).
+    Fallback-only rulebooks (`- Scope-fallback-only: true`, e.g. Dizzy Dean as Hopewell's default) count
+    only when they are in scope for q, so ingesting one league's fallback can't reweight other scopes'
+    questions. Counting strictly within the in-scope notes was tried first: it made small league scopes
+    (Hobgood, 12 notes) mark their own core words common and broke hg-cond-catcher, so every other note
+    still counts as before."""
     files = brain.canon_files(brain.VAULT)
     allowed = brain.apply_scope_gates(q, {brain.rel(f) for f in files})
-    return [_words(f.read_text(encoding="utf-8")) for f in files if brain.rel(f) in allowed] or \
-           [_words(f.read_text(encoding="utf-8")) for f in files]
+    return [_words(f.read_text(encoding="utf-8")) for f in files
+            if not brain.fallback_only(brain.rel(f)) or brain.rel(f) in allowed]
 
 
 def attribute_terms(q: str) -> list[str]:
