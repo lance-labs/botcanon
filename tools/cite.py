@@ -52,8 +52,21 @@ def _keep(t: str) -> bool:
     return len(t) >= 3 or (len(t) >= 2 and any(ch.isdigit() for ch in t))
 
 
+def scoped_docs(q: str) -> list[set[str]]:
+    """Word sets for document frequency (the common-word discount) for q (Lance 2026-10-30 16:03 ET).
+    Fallback-only rulebooks (`- Scope-fallback-only: true`, e.g. Dizzy Dean as Hopewell's default) count
+    only when they are in scope for q, so ingesting one league's fallback can't reweight other scopes'
+    questions. Counting strictly within the in-scope notes was tried first: it made small league scopes
+    (Hobgood, 12 notes) mark their own core words common and broke hg-cond-catcher, so every other note
+    still counts as before."""
+    files = brain.canon_files(brain.VAULT)
+    allowed = brain.apply_scope_gates(q, {brain.rel(f) for f in files})
+    return [_words(f.read_text(encoding="utf-8")) for f in files
+            if not brain.fallback_only(brain.rel(f)) or brain.rel(f) in allowed]
+
+
 def attribute_terms(q: str) -> list[str]:
-    docs = [_words(p.read_text(encoding="utf-8")) for p in brain.canon_files(brain.VAULT)]
+    docs = scoped_docs(q)
     stop = {_norm(w) for w in brain.STOPWORDS} | STOP | {_norm(w) for w in OWNER}
     terms = [t for t in dict.fromkeys(_norm(w) for w in re.findall(r"[A-Za-z0-9']+", q)) if t not in stop and _keep(t)]
     n = max(len(docs), 1)
@@ -66,7 +79,7 @@ def attribute_terms(q: str) -> list[str]:
 def term_weights(q: str) -> dict[str, float]:
     """Every content word of the question counts; rare ones count more. Dropping common words
     entirely let "when does the bakery open" be answered by any line that says "bakery"."""
-    docs = [_words(p.read_text(encoding="utf-8")) for p in brain.canon_files(brain.VAULT)]
+    docs = scoped_docs(q)
     stop = {_norm(w) for w in brain.STOPWORDS} | STOP | {_norm(w) for w in OWNER}
     terms = [t for t in dict.fromkeys(_norm(w) for w in re.findall(r"[A-Za-z0-9']+", q)) if t not in stop and _keep(t)]
     n = max(len(docs), 1)
